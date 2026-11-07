@@ -1,0 +1,71 @@
+name: steam-headless
+
+services:
+  desktop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: steam-headless-bc250:2
+    container_name: steam-headless
+    hostname: steam-headless
+    restart: unless-stopped
+    network_mode: host
+
+    cap_add:
+      - DAC_READ_SEARCH
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_NICE
+      - SYS_PTRACE
+
+    security_opt:
+      - apparmor:unconfined
+      - seccomp=unconfined
+      - systempaths=unconfined
+      - writable-cgroups=true
+    cgroup: private
+
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 30s
+    pids_limit: 8192
+    shm_size: 2gb
+    tty: true
+
+    environment:
+      PUID: '${PUID:-1000}'
+      PGID: '${PGID:-1000}'
+      TZ: '${TZ:-UTC}'
+      COMPOSITOR_RENDER_DEVICE: '/dev/dri/renderD128'
+      ENCODER_RENDER_DEVICE: '/dev/dri/renderD128'
+      # Boot straight into gamescope + Steam gamepad UI (SteamOS-like).
+      # Runtime switch: docker exec steam-headless steam-headless-session-mode desktop
+      STEAM_HEADLESS_SESSION_MODE: 'gaming'
+      # No VAAPI on GFX1013 -> SHUI must be told explicitly.
+      SHUI_ENCODER: 'software'
+      # We own ~/.config/sunshine via the baked defaults (see Dockerfile);
+      # auto-config would pin "encoder = vaapi" and re-add the display-mode prep.
+      SUNSHINE_ENABLE_AUTO_CONFIG: 'false'
+      SUNSHINE_ENABLE_AUTO_DISPLAY_MODE: 'false'
+
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/fuse:/dev/fuse
+      - /dev/uinput:/dev/uinput
+      - /dev/uhid:/dev/uhid
+
+    device_cgroup_rules:
+      - 'c 13:* rwm'
+
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+      - /dev/input:rw,dev,mode=0755
+
+    volumes:
+      - /etc/localtime:/run/host-localtime:ro
+      - /sys/devices/virtual/input:/sys/devices/virtual/input:ro
+      - ${SH2_DIR:-/opt/steam-headless}/state:/var/lib/steam-headless
+      - ${SH2_DIR:-/opt/steam-headless}/journal:/var/log/journal
+      - ${SH2_DIR:-/opt/steam-headless}/data/home:/home/steamheadless
+      - ${SH2_DIR:-/opt/steam-headless}/games:/mnt/games

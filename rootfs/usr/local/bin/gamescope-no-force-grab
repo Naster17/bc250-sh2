@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Run the stock Steam Headless gamescope launcher without --force-grab-cursor.
+#
+# gamescope --help:
+#   --force-grab-cursor  always use relative mouse mode instead of flipping
+#                        dependent on cursor visibility
+#
+# In that mode gamescope keeps the real pointer warped at the screen centre and
+# only accumulates deltas, while Steam (an Xwayland client, QT_QPA_PLATFORM=xcb,
+# DISPLAY=:1) paints its own cursor at the delta position. Over Moonlight/SHUI
+# this shows up as a second, blinking cursor in the middle of the screen and as
+# clicks being delivered to the centre instead of the visible cursor.
+#
+# Everything else (--grab is keyboard-only, --steam, mangoapp, xwayland pairs,
+# nested sizes, ready/stats pipes) is taken from the image script unchanged, so
+# an upstream update keeps working as long as that script still exists.
+#
+# The patched copy must live outside /run and /tmp: those tmpfs mounts are
+# noexec and systemd then reports status=126/n/a + "Permission denied".
+set -euo pipefail
+
+home="${HOME:-/home/steamheadless}"
+patched_dir="${home}/.local/state/steam-headless"
+patched="${patched_dir}/gamescope-launch.sh"
+source_script=/usr/local/bin/steam-headless-gamescope
+
+[[ -r "${source_script}" ]] || {
+    echo "missing ${source_script}" >&2
+    exit 1
+}
+
+mkdir -p "${patched_dir}"
+grep -v -- '--force-grab-cursor' "${source_script}" >"${patched}"
+chmod 0755 "${patched}"
+
+exec "${patched}"
