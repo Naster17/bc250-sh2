@@ -347,11 +347,35 @@ integer percentage into `/run/gpu-metrics/gpu_busy_percent`, which
 `docker-compose.yml` bind-mounts over the sysfs path. The file is written in
 place at a fixed width, so a concurrent reader never sees a truncated value.
 
-The host file must exist before the container starts:
+The overlay in gaming mode is **MangoHud** (`mangoapp`, spawned by gamescope), not
+Steam's own overlay. MangoHud reads two sources and prefers the second:
+
+1. `/sys/class/drm/card0/device/gpu_busy_percent` (`AMDGPU::get_sysfs_metrics`)
+2. the binary `/sys/class/drm/card0/device/gpu_metrics` table
+   (`AMDGPU::get_samples_and_copy`, which overwrites `metrics.load` on every poll)
+
+In that 128-byte table (header `structure_size=128 format_revision=2
+content_revision=2`) the field `average_gfx_activity` sits at **offset 28**. The
+SMU reports `0xFFFF` there on this APU, and MangoHud's centipercent heuristic
+(`if (load > 100) load /= 100`) turns `65535` into `655` — that is the 655% in the
+overlay. `gpu_busy_percent` cannot help because it is overwritten by the metrics
+poll.
+
+So the same daemon rewrites the table every cycle: it reads the real table through
+`/run/gpu-device/gpu_metrics` (the PCI device directory bind-mounted read-only),
+patches the two bytes at offset 28 with the measured percentage, and writes the
+result into the file shadowing the sysfs path. Every other field (temperatures,
+clocks, power) is passed through untouched, so those keep tracking the hardware.
+The activity field is written as a plain percentage, not the driver's
+centipercent, because values ≤ 100 are exactly what MangoHud renders.
+
+The host files must exist before the container starts:
 
 ```bash
 mkdir -p "${SH2_DIR:-/opt/steam-headless}/metrics"
 printf '00\n' > "${SH2_DIR:-/opt/steam-headless}/metrics/gpu_busy_percent"
+cp /sys/class/drm/card0/device/gpu_metrics \
+   "${SH2_DIR:-/opt/steam-headless}/metrics/gpu_metrics"   # 128-byte seed
 ```
 
 ### CPU clock

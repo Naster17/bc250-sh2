@@ -3,6 +3,28 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.3.1] - 2026-11-08
+
+GPU usage still read `655%` after 1.3.0. The 1.3.0 fix was correct but incomplete:
+the overlay in gaming mode is MangoHud, not Steam's own overlay.
+
+### Fixed
+
+- **MangoHud prefers `gpu_metrics` over `gpu_busy_percent`.** `mangoapp` polls the
+  binary `/sys/class/drm/card0/device/gpu_metrics` table and overwrites
+  `metrics.load` from it on every refresh, so the sysfs percentage was ignored.
+  The table's `average_gfx_activity` (offset 28 of the 128-byte v2.x layout) is
+  `0xFFFF` on this APU, and MangoHud's centipercent heuristic divides anything
+  above 100 by 100: `65535 / 100 = 655`.
+- `steam-gpu-load` now rewrites that table each cycle: real table from the
+  read-only device-directory bind mount, activity bytes patched with the measured
+  percentage, everything else (temperature, clocks, power) passed through.
+- The sysfs percentage shim stays — Steam's own overlay reads it, and MangoHud
+  still uses it when the metrics table is unreadable.
+
+Verified in the container: `gpu_metrics` activity tracks `gpu_busy_percent`
+(`63` vs `63`) while `temperature_gfx` matches the live driver value.
+
 ## [1.3.0] - 2026-11-07
 
 Steam's performance overlay reported impossible hardware numbers on the BC-250:

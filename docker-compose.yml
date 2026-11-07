@@ -78,3 +78,10 @@ services:
       # the container starts.
       - ${SH2_DIR:-/opt/steam-headless}/metrics:/run/gpu-metrics
       - ${SH2_DIR:-/opt/steam-headless}/metrics/gpu_busy_percent:/sys/class/drm/card0/device/gpu_busy_percent:ro
+      # MangoHud (the overlay in gaming mode) also reads the binary gpu_metrics
+      # table and prefers its `average_gfx_activity` over gpu_busy_percent. On
+      # this APU that field is 0xFFFF, which MangoHud divides by 100 and renders
+      # as 655%. Shadow the table as well; steam-gpu-load rewrites it every
+      # cycle with the measured activity.
+      - /sys/class/drm/card0/device:/run/gpu-device:ro
+      - ${SH2_DIR:-/opt/steam-headless}/metrics/gpu_metrics:/sys/class/drm/card0/device/gpu_metrics:ro

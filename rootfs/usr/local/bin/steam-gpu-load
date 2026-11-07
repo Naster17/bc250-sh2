@@ -34,7 +34,14 @@ import time
 from pathlib import Path
 
 OUT = Path(os.environ.get("GPU_LOAD_FILE", "/run/gpu-metrics/gpu_busy_percent"))
+METRICS_REAL = Path(os.environ.get("GPU_METRICS_REAL", "/run/gpu-device/gpu_metrics"))
+METRICS_OUT = Path(os.environ.get("GPU_METRICS_FILE", "/run/gpu-metrics/gpu_metrics"))
 INTERVAL = float(os.environ.get("GPU_LOAD_INTERVAL", "0.5"))
+# Offset of `average_gfx_activity` in the 128-byte gpu_metrics v2.x table that
+# amdgpu exposes on this APU (header 4 + gfx/soc temp 4 + core temps 16 +
+# l3 temps 4). The SMU reports 0xFFFF ("invalid") there, and MangoHud divides
+# anything above 100 by 100, which is where 655% comes from.
+ACTIVITY_OFFSET = 28
 ENGINE = b"drm-engine-gfx:"
 WIDTH = 3  # "NN\n"
 
@@ -82,10 +89,34 @@ def publish(percent: int) -> None:
         handle.truncate(WIDTH)
 
 
+def publish_metrics(percent: int) -> None:
+    """Refresh the shadowed gpu_metrics table, patching the activity field.
+
+    The whole table is rewritten every cycle so temperature, clocks and power
+    keep tracking the hardware; only `average_gfx_activity` differs from what
+    the driver reports.
+    """
+    try:
+        table = bytearray(METRICS_REAL.read_bytes())
+    except OSError:
+        return
+    if len(table) < ACTIVITY_OFFSET + 2:
+        return
+    table[ACTIVITY_OFFSET] = percent & 0xFF
+    table[ACTIVITY_OFFSET + 1] = (percent >> 8) & 0xFF
+    if not METRICS_OUT.exists() or METRICS_OUT.stat().st_size != len(table):
+        METRICS_OUT.write_bytes(bytes(table))
+        return
+    with open(METRICS_OUT, "r+b") as handle:
+        handle.seek(0)
+        handle.write(bytes(table))
+
+
 def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     if not OUT.exists() or OUT.stat().st_size != WIDTH:
         OUT.write_bytes(b"00\n")
+    publish_metrics(0)
 
     previous = snapshot()
     last = time.monotonic()
@@ -109,8 +140,9 @@ def main() -> int:
             percent = min(100, int(total * 100 / (elapsed * 1_000_000_000)))
         try:
             publish(percent)
+            publish_metrics(percent)
         except OSError as exc:
-            print(f"cannot write {OUT}: {exc}", file=sys.stderr, flush=True)
+            print(f"cannot publish metrics: {exc}", file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":
