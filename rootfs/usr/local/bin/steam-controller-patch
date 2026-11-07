@@ -10,16 +10,26 @@ plain Full_Press activator only. We insert one extra activator:
 Performance, Friends, notifications) - the same action the stock Xbox chord config
 binds to Guide+A in chord_xboxone.vdf.
 
-Why the size juggling: Steam verifies controller_base files against the depot
-manifest at startup ("BVerifyInstalledFiles: ... is N bytes, expected M") and a
-Steam client update re-extracts them. KeyValues ignores whitespace, so after
-inserting the activator we remove exactly as many leading indentation characters
-as we added, keeping each file byte-identical in length to the shipped one.
+Two hard requirements learned the hard way:
+
+1. The result must stay valid KeyValues *and* keep its byte size. Steam verifies
+   controller_base against its depot manifest at startup
+   ("BVerifyInstalledFiles: ... is N bytes, expected M") and re-extracts
+   mismatching files, so every file must keep its exact original length.
+   KeyValues ignores whitespace: after inserting the activator we remove exactly
+   as many leading indentation characters as we added.
+2. The activator must not duplicate an existing one. Some stock inputs already
+   carry a Long_Press binding; adding a second one makes Steam fail with
+   "CPrepareConfigWorker failed for AppID 769" and the gamepad stops working
+   entirely. Those inputs are skipped.
+
+Everything is validated with a built-in KeyValues parser before anything is
+written; a file that does not parse, or that ends up with duplicate activators,
+is left untouched.
 
 Short presses are untouched: an extra activator does not change Full_Press.
 The script is idempotent (files already carrying system_key_1 are skipped) and is
-re-run from /usr/local/sh-init.d on every boot, so a Steam update that restores
-the stock files is repaired at the next container start.
+re-run from /usr/local/sh-init.d on every boot.
 
 Usage: steam-controller-patch [--steam-home DIR] [--dry-run] [--verbose]
 """
@@ -38,6 +48,120 @@ TARGETS = (
 )
 
 MARKER = "system_key_1"
+INPUT_END = ('"button_menu"', '"left_bumper"', '"right_bumper"')
+
+
+class KVError(Exception):
+    pass
+
+
+def tokenize(text: str):
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c in " \t\r\n":
+            i += 1
+            continue
+        if c == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if c in "{}":
+            yield c, c
+            i += 1
+            continue
+        if c == '"':
+            i += 1
+            buf = []
+            while i < n and text[i] != '"':
+                if text[i] == "\\" and i + 1 < n:
+                    i += 1
+                buf.append(text[i])
+                i += 1
+            if i >= n:
+                raise KVError("unterminated string")
+            i += 1
+            yield "str", "".join(buf)
+            continue
+        raise KVError(f"unexpected character {c!r} at offset {i}")
+
+
+def validate(text: str) -> None:
+    """Raise KVError unless the text is KeyValues Steam can load."""
+    tokens = list(tokenize(text))
+    pos = 0
+    stack: list[dict[str, int]] = [{}]
+
+    def counts() -> dict[str, int]:
+        return stack[-1]
+
+    while pos < len(tokens):
+        kind, value = tokens[pos]
+        if kind == "}":
+            if len(stack) == 1:
+                raise KVError("unbalanced closing brace")
+            stack.pop()
+            pos += 1
+            continue
+        if kind != "str":
+            raise KVError(f"expected key, got {value!r}")
+        key = value
+        pos += 1
+        if pos >= len(tokens):
+            raise KVError(f"key {key!r} without a value")
+        kind2, value2 = tokens[pos]
+        if kind2 == "{":
+            stack.append({})
+            pos += 1
+        elif kind2 == "str":
+            if key in counts():
+                counts()[key] += 1
+            else:
+                counts()[key] = 1
+            pos += 1
+        else:
+            raise KVError(f"unexpected token {value2!r} after key {key!r}")
+
+    if len(stack) != 1:
+        raise KVError("unbalanced opening brace")
+
+    # Duplicate activator names inside one activators block break Steam's loader.
+    stack = [{}]
+    pos = 0
+    while pos < len(tokens):
+        kind, value = tokens[pos]
+        if kind == "}":
+            stack.pop()
+            pos += 1
+            continue
+        if kind != "str":
+            raise KVError("unexpected token")
+        key = value
+        pos += 1
+        kind2, value2 = tokens[pos]
+        if kind2 == "{":
+            block: dict[str, int] = {}
+            if key == "activators":
+                inner = pos + 1
+                depth = 1
+                while inner < len(tokens) and depth:
+                    k2, v2 = tokens[inner]
+                    if k2 == "{":
+                        depth += 1
+                    elif k2 == "}":
+                        depth -= 1
+                    elif depth == 1 and k2 == "str":
+                        nxt = tokens[inner + 1] if inner + 1 < len(tokens) else None
+                        if nxt and nxt[0] in ("str", "{"):
+                            block[v2] = block.get(v2, 0) + 1
+                    inner += 1
+                for name, count in block.items():
+                    if count > 1:
+                        raise KVError(f"duplicate activator {name!r}")
+            stack.append(block)
+            pos += 1
+        else:
+            pos += 1
 
 
 def block_for(newline: str) -> str:
@@ -58,11 +182,6 @@ def block_for(newline: str) -> str:
 
 
 def strip_indentation(lines: list[str], budget: int) -> int:
-    """Remove `budget` leading whitespace characters, a few per line.
-
-    Only characters before the first non-whitespace character are touched, so a
-    quoted value can never be modified. Line endings are preserved.
-    """
     remaining = budget
     for index, line in enumerate(lines):
         if remaining <= 0:
@@ -78,6 +197,21 @@ def strip_indentation(lines: list[str], budget: int) -> int:
     return remaining
 
 
+def activators_body(lines: list[str], start: int) -> str:
+    depth = 0
+    opened = False
+    collected: list[str] = []
+    for k in range(start, len(lines)):
+        s = lines[k].strip()
+        if "{" in s:
+            opened = True
+        depth += s.count("{") - s.count("}")
+        collected.append(lines[k])
+        if opened and depth <= 0:
+            break
+    return "".join(collected)
+
+
 def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
     raw = path.read_bytes()
     original_size = len(raw)
@@ -87,53 +221,64 @@ def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
 
     out: list[str] = []
     inserted = 0
+    skipped = 0
     i = 0
     while i < len(lines):
-        line = lines[i]
-        out.append(line)
-        if line.strip() != '"button_escape"':
+        out.append(lines[i])
+        if lines[i].strip() != '"button_escape"':
             i += 1
             continue
 
         j = i + 1
-        while j < len(lines) and lines[j].strip() != '"activators"':
-            if lines[j].strip() in ('"button_menu"', '"left_bumper"', '"right_bumper"'):
+        while j < len(lines) and lines[j].strip() not in INPUT_END:
+            if lines[j].strip() == '"activators"':
                 break
             j += 1
         if j >= len(lines) or lines[j].strip() != '"activators"':
             i += 1
             continue
 
-        out.append(lines[j])
-        j += 1
-        if j >= len(lines) or lines[j].strip() != "{":
-            i = j
+        while i < j:                       # copy everything up to "activators"
+            i += 1
+            out.append(lines[i])
+        if i + 1 >= len(lines) or lines[i + 1].strip() != "{":
+            i += 1
             continue
-        out.append(lines[j])
-        j += 1
+        i += 1                             # and the brace that opens it
+        out.append(lines[i])
 
-        if MARKER in "".join(lines[j : j + 40]):
-            i = j
-            continue
-
-        out.append(block_for(newline))
-        inserted += 1
-        i = j
+        body = activators_body(lines, i + 1)
+        if MARKER in body:
+            skipped += 1
+        elif '"Long_Press"' in body:
+            skipped += 1
+        else:
+            out.append(block_for(newline))
+            inserted += 1
+        i += 1
 
     if not inserted:
-        return 0, f"already patched ({original_size} bytes)"
+        return 0, f"nothing to do ({skipped} inputs already covered, {original_size} bytes)"
 
     patched = "".join(out)
+    try:
+        validate(patched)
+    except KVError as exc:
+        return 0, f"refusing to write, invalid result: {exc}"
+
     delta = len(patched.encode("utf-8", "surrogateescape")) - original_size
     if verbose:
         print(f"  {path.name}: {inserted} inserts, delta {delta:+d} bytes")
-
     if delta > 0:
         balanced = patched.splitlines(keepends=True)
         left = strip_indentation(balanced, delta)
         patched = "".join(balanced)
         if left:
-            return 0, f"cannot balance size, {left} bytes short of the original"
+            return 0, f"cannot balance size, {left} bytes short"
+        try:
+            validate(patched)
+        except KVError as exc:
+            return 0, f"refusing to write, invalid after balancing: {exc}"
 
     final_size = len(patched.encode("utf-8", "surrogateescape"))
     if final_size != original_size:
@@ -141,7 +286,7 @@ def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
 
     if not dry_run:
         path.write_bytes(patched.encode("utf-8", "surrogateescape"))
-    return inserted, f"size kept at {final_size} bytes"
+    return inserted, f"size kept at {final_size} bytes, {skipped} inputs skipped"
 
 
 def main() -> int:

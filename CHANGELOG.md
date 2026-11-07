@@ -3,6 +3,28 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.2.1] - 2026-11-07
+
+Fix for a regression introduced by 1.2.0: the gamepad stopped working in the
+gamepad UI (`CPrepareConfigWorker failed for AppID 769`,
+`No config for controller found locally`).
+
+### Fixed
+
+- **Dropped `{` in the layouts.** The inserter copied only the `"activators"`
+  line and the brace after it, silently skipping the brace that opens the
+  `"button_escape"` input block. The result was invalid KeyValues, so Steam could
+  not prepare *any* controller config and every button was dead.
+- **Duplicate activator guard.** Some stock inputs already carry a `Long_Press`
+  binding; adding a second one is equally fatal. Those inputs are now skipped.
+- **Validation before writing.** The patcher now contains a KeyValues parser and
+  refuses to write a file that does not parse, that ends up with duplicate
+  activators, or whose byte size changed. Balancing is re-validated after the
+  whitespace strip.
+- Repair path used on the live box: strip the inserted blocks, restore the
+  missing braces, pad to the depot size, re-parse, then restart Steam — verified
+  with `0` `CPrepareConfigWorker` lines and a working pad.
+
 ## [1.2.0] - 2026-11-07
 
 Long-press Select opens the Quick Access Menu, so a worn Guide button no longer

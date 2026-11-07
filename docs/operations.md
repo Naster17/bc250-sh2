@@ -280,6 +280,20 @@ docker exec steam-headless stat -c '%s %n' $C/desktop_xboxone.vdf   # 7924
 docker exec steam-headless journalctl -u steam-headless-steam -n 300 | grep -c BVerifyInstalledFiles
 ```
 
+The patcher validates every file with an embedded KeyValues parser before writing
+and refuses to write a result that does not parse, that contains duplicate
+activators, or whose byte size changed. This matters: an invalid layout makes
+Steam log `CPrepareConfigWorker failed for AppID 769` /
+`No config for controller found locally` and **the whole pad stops working** in
+the gamepad UI, not just the new binding. Two traps that produced exactly that:
+
+- dropping the `{` that opens a `"button_escape"` block while inserting;
+- adding a second `"Long_Press"` to an input that already has one.
+
+If the pad is dead after an edit, check those log lines first, then restore the
+files to their depot size (Steam re-extracts them on its next client update) and
+restart `steam-headless-steam`.
+
 Changing the timing: edit `long_press_time` in the `block_for()` helper of
 `rootfs/usr/local/bin/steam-controller-patch`, rebuild, and delete the four files
 (Steam re-extracts the stock ones) or run the patcher against a stock tree.
