@@ -90,6 +90,7 @@ docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
 Dockerfile
 docker-compose.yml
 .env.example
+docs/operations.md        # full ops manual: ports, Sunshine resets, modes, troubleshooting
 rootfs/
   etc/systemd/system/steam-headless-gamescope.service.d/50-no-force-grab-cursor.conf
   usr/local/bin/gamescope-no-force-grab
