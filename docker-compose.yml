@@ -64,7 +64,11 @@ services:
 
     volumes:
       - /etc/localtime:/run/host-localtime:ro
-      - /sys/devices/virtual/input:/sys/devices/virtual/input:ro
+      # NOTE: no /sys/devices/virtual/input bind mount. That tree only exists once
+      # a virtual input device is registered, so on a cold boot Docker tried to
+      # mkdir it inside sysfs and failed ("operation not permitted"), leaving the
+      # container unstartable. The container registers its own uinput devices and
+      # sees them through the regular /sys mount and its private /dev/input tmpfs.
       - ${SH2_DIR:-/opt/steam-headless}/state:/var/lib/steam-headless
       - ${SH2_DIR:-/opt/steam-headless}/journal:/var/log/journal
       - ${SH2_DIR:-/opt/steam-headless}/data/home:/home/steamheadless

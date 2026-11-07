@@ -3,6 +3,26 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.1] - 2026-11-08
+
+Cold boot left the container unstartable:
+
+```text
+error while creating mount source path '/sys/devices/virtual/input':
+mkdir /sys/devices/virtual/input: operation not permitted
+```
+
+### Fixed
+
+- **Dropped the `/sys/devices/virtual/input` bind mount.** That sysfs tree only
+  appears once a virtual input device is registered, so on a fresh boot Docker
+  tried to create the source path inside sysfs and failed, aborting the whole
+  container. The container registers its own uinput devices (Steam's virtual
+  gamepad) and sees them through the regular `/sys` mount plus its private
+  `/dev/input` tmpfs, so the bind was redundant as well as fragile. Verified
+  after removal: `/dev/input` gets `event*`/`js0`, `/sys/devices/virtual/input`
+  appears once uinput registers, health `33/0`.
+
 ## [1.4.0] - 2026-11-08
 
 Release hygiene and the last two overlay metrics.
