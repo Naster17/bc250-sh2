@@ -519,6 +519,7 @@ Never delete `/var/lib/steam-headless/installation.json` or `/home/steamheadless
 | stream dies 10–15 s after the app launches | client abort after failed handshake (`Executing Undo Cmd`, no `CLIENT CONNECTED`) |
 | container silently back in KDE after boot | `steam-headless-gaming-fallback` fired (4 failures / 60 s) → `journalctl -u steam-headless-gamescope -u steam-headless-steam` |
 | `gamescope` exits `status=126/n/a`, `Permission denied` | launcher script on a `noexec` tmpfs (`/run`, `/tmp`) → keep it under `$HOME` (§7.1) |
+| black screen with only the cursor after `docker compose up -d` (UI never draws, `steam-ready` exists) | Steam's gamepad UI occasionally fails to come up on a fresh container; the session itself is healthy → `docker exec steam-headless systemctl restart steam-headless-steam` and wait ~20 s |
 | `KWin did not become ready for Gamescope` | `steam-headless-compositor.service` failed; gamescope exits by design |
 | gamepad UI shows a login screen | `loginusers.vdf` has no `AccountName` → log in once in desktop mode |
 | `Configuration file ... is marked world-writable` | cosmetic systemd warnings shipped by the image |
