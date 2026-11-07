@@ -69,3 +69,12 @@ services:
       - ${SH2_DIR:-/opt/steam-headless}/journal:/var/log/journal
       - ${SH2_DIR:-/opt/steam-headless}/data/home:/home/steamheadless
       - ${SH2_DIR:-/opt/steam-headless}/games:/mnt/games
+      # The BC-250 amdgpu driver answers gpu_busy_percent with EOPNOTSUPP, which
+      # is what makes Steam's performance overlay report nonsense (655%). Steam
+      # reads this exact path, so shadow it with a file that
+      # /usr/local/bin/steam-gpu-load keeps updated from the fdinfo counters
+      # (the same source amdgpu_top uses). The directory is owned by the host
+      # user and must exist, with a 3-byte gpu_busy_percent file inside, before
+      # the container starts.
+      - ${SH2_DIR:-/opt/steam-headless}/metrics:/run/gpu-metrics
+      - ${SH2_DIR:-/opt/steam-headless}/metrics/gpu_busy_percent:/sys/class/drm/card0/device/gpu_busy_percent:ro

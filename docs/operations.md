@@ -314,7 +314,80 @@ Caveats: a Steam client update restores the stock files, and the patch is only
 re-applied at the next container start (`docker compose restart` is enough); if
 Steam's UI keeps a cached copy, restart `steam-headless-steam` after patching.
 
-## 10. Managed Sunshine config
+## 10. Performance overlay metrics (GPU %, CPU MHz)
+
+The BC-250 exposes less telemetry than a normal desktop GPU, and Steam's overlay
+(`gameoverlayui.so`) reads plain sysfs, so two numbers come out wrong out of the
+box. Both are fixed by publishing the values the overlay expects, inside the
+container only.
+
+### GPU utilisation
+
+Steam reads exactly one file for GPU %:
+
+```text
+/sys/class/drm/card0/device/gpu_busy_percent
+```
+
+The amdgpu driver answers that read with `EOPNOTSUPP` on GFX1013 (there is no
+per-ASIC switch), which is why the overlay showed values like `655%`.
+`amdgpu_top` is correct because it never asks the driver: it parses the per-client
+engine counters in `/proc/<pid>/fdinfo/<fd>`
+
+```text
+drm-engine-gfx:	123456789 ns
+```
+
+and divides the delta by the sampling interval
+(`libamdgpu_top/src/stat/fdinfo/proc_info.rs::diff_usage`).
+
+`/usr/local/bin/steam-gpu-load` (unit `steam-gpu-load.service`) does the same:
+sums the delta across every DRM client in the container every 500 ms and writes an
+integer percentage into `/run/gpu-metrics/gpu_busy_percent`, which
+`docker-compose.yml` bind-mounts over the sysfs path. The file is written in
+place at a fixed width, so a concurrent reader never sees a truncated value.
+
+The host file must exist before the container starts:
+
+```bash
+mkdir -p "${SH2_DIR:-/opt/steam-headless}/metrics"
+printf '00\n' > "${SH2_DIR:-/opt/steam-headless}/metrics/gpu_busy_percent"
+```
+
+### CPU clock
+
+Steam reads:
+
+```text
+/sys/devices/system/cpu/cpu<N>/cpufreq/scaling_cur_freq   (kHz)
+/sys/devices/system/cpu/cpu<N>/cpufreq/cpuinfo_min_freq
+```
+
+The BC-250 runs a fixed-clock kernel: no cpufreq driver is registered, so
+`/sys/devices/system/cpu/cpufreq/` is empty and the per-CPU directories do not
+exist. The overlay then shows a constant. btop still reports the real clock
+because it falls back to `/proc/cpuinfo`.
+
+`/usr/local/bin/steam-cpu-freq` (unit `steam-cpu-freq.service`) cannot create
+those directories — sysfs is read-only — so it shadows each existing
+`/sys/devices/system/cpu/cpu<N>` inside the container with a view that symlinks
+every real entry through `/run/cpu-real` (topology, cache, driver, power keep
+working) and adds a real `cpufreq/` directory. The files are then kept in sync
+with `/proc/cpuinfo` every second. The mounts live in the container's mount
+namespace only.
+
+### Verify
+
+```bash
+docker exec steam-headless cat /sys/class/drm/card0/device/gpu_busy_percent   # live %
+docker exec steam-headless cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
+docker exec steam-headless systemctl is-active steam-gpu-load steam-cpu-freq
+```
+
+Idle desktop UI sits near `0`, the Steam gamepad UI during animations around
+`60`, and a 3D load (`glmark2`) pins `100` — that range was measured on this box.
+
+## 11. Managed Sunshine config
 
 Seeded on first boot by `/usr/local/sh-init.d/10-seed-sunshine-config.sh` from
 `/usr/share/steam-headless-custom/`; existing files are never overwritten.
@@ -349,7 +422,7 @@ client inside the same session):
 }
 ```
 
-## 11. Apps and launchers in gaming mode
+## 12. Apps and launchers in gaming mode
 
 Only Steam and the processes it spawns inherit
 `/run/steam-headless/gamescope-environment`. Anything started by Sunshine or by
@@ -362,7 +435,7 @@ SHUI lands on KWin (invisible under the fullscreen gamescope), so:
 - adding a non-Steam shortcut needs desktop-mode Steam UI (gamepad UI has no such
   button) or a generated `shortcuts.vdf`.
 
-## 12. Daily operations
+## 13. Daily operations
 
 ```bash
 cd ~/steam-headless-bc250
@@ -377,7 +450,7 @@ docker exec steam-headless journalctl -u steam-headless-steam -n 50 --no-pager
 docker exec steam-headless journalctl -u steam-headless-sunshine -n 50 --no-pager
 ```
 
-## 13. Backup / restore
+## 14. Backup / restore
 
 ```bash
 cd ~/sh2
@@ -396,7 +469,7 @@ docker logs steam-headless 2>&1 | head -n 55
 
 Never delete `/var/lib/steam-headless/installation.json` or `/home/steamheadless`.
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|

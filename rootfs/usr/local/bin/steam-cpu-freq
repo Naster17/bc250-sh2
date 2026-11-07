@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Give Steam's performance overlay a real CPU clock.
+#
+# Steam reads the CPU frequency from
+#   /sys/devices/system/cpu/cpu<N>/cpufreq/scaling_cur_freq   (kHz)
+#   /sys/devices/system/cpu/cpu<N>/cpufreq/cpuinfo_min_freq
+# and shows a constant when those files are missing. They are missing on the
+# BC-250: the board runs a fixed-clock kernel with no cpufreq driver registered,
+# so /sys/devices/system/cpu/cpufreq/ is empty and the per-CPU cpufreq
+# directories do not exist. btop still shows the real ~3.5 GHz because it falls
+# back to /proc/cpuinfo ("cpu MHz"), which is what this script publishes.
+#
+# Mechanism: sysfs is read-only, so the missing cpufreq directories cannot be
+# created. Instead each /sys/devices/system/cpu/cpu<N> directory (which does
+# exist) is shadowed inside this container by a small view that
+#   * symlinks every real entry through /run/cpu-real (topology, cache, driver,
+#     power, ... keep working), and
+#   * adds a real cpufreq/ directory with the files Steam looks for.
+# The mounts live in the container's mount namespace only; the host and other
+# containers are untouched.
+#
+# The same script then keeps scaling_cur_freq in sync with /proc/cpuinfo.
+set -euo pipefail
+
+REAL=/run/cpu-real
+VIEW=/run/cpu-view
+INTERVAL=${CPU_FREQ_INTERVAL:-1}
+BASE_KHZ=${CPU_BASE_KHZ:-3500000}
+FLOOR_KHZ=${CPU_FLOOR_KHZ:-1400000}
+
+mkdir -p "${REAL}" "${VIEW}"
+
+if ! mountpoint -q "${REAL}"; then
+    mount --bind /sys/devices/system/cpu "${REAL}"
+fi
+
+# /proc/cpuinfo lists "cpu MHz" per logical CPU in kernel order (cpu0..cpuN).
+read_clocks() {
+    awk '/^cpu MHz/ { printf "%d\n", $4 * 1000 }' /proc/cpuinfo
+}
+
+shopt -s nullglob
+for real_cpu in "${REAL}"/cpu[0-9]*; do
+    cpu=$(basename "${real_cpu}")
+    view="${VIEW}/${cpu}"
+
+    mkdir -p "${view}/cpufreq"
+    for child in "${real_cpu}"/*; do
+        name=$(basename "${child}")
+        [ "${name}" = "cpufreq" ] && continue
+        ln -sfn "${child}" "${view}/${name}"
+    done
+
+    # Defaults are written before the bind mount so Steam never sees an empty
+    # file; the loop below replaces scaling_cur_freq with live values.
+    printf '%s\n' "${FLOOR_KHZ}" > "${view}/cpufreq/cpuinfo_min_freq"
+    printf '%s\n' "${BASE_KHZ}"  > "${view}/cpufreq/cpuinfo_max_freq"
+    printf '%s\n' "${FLOOR_KHZ}" > "${view}/cpufreq/scaling_min_freq"
+    printf '%s\n' "${BASE_KHZ}"  > "${view}/cpufreq/scaling_max_freq"
+    printf '%s\n' "${BASE_KHZ}"  > "${view}/cpufreq/scaling_cur_freq"
+
+    if ! mountpoint -q "/sys/devices/system/cpu/${cpu}"; then
+        mount --bind "${view}" "/sys/devices/system/cpu/${cpu}"
+    fi
+done
+
+while true; do
+    index=0
+    while read -r khz; do
+        file="${VIEW}/cpu${index}/cpufreq/scaling_cur_freq"
+        if [ -n "${khz}" ] && [ -e "${file}" ]; then
+            printf '%s\n' "${khz}" > "${file}"
+        fi
+        index=$((index + 1))
+    done < <(read_clocks)
+    sleep "${INTERVAL}"
+done

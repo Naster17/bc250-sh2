@@ -1,0 +1,18 @@
+[Unit]
+Description=Publish AMD GPU utilisation for Steam's performance overlay
+Documentation=https://github.com/Naster17/steam-headless-bc250
+# The amdgpu driver on the BC-250 does not support gpu_busy_percent, so Steam's
+# overlay reads a file this service keeps up to date. Nothing here depends on
+# Steam; it only needs the bind-mounted metrics file from docker-compose.yml.
+After=local-fs.target
+Before=steam-headless-steam.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/steam-gpu-load
+Restart=always
+RestartSec=2
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

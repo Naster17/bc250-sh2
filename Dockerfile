@@ -7,6 +7,10 @@
 #   * first-boot seeding of ~/.config/sunshine/{sunshine.conf,apps.json}
 #   * "long press Select -> Quick Access Menu" added to Steam's default
 #     controller layouts (re-applied on every boot, Steam updates overwrite them)
+#   * GPU utilisation exporter, because the BC-250 driver does not support
+#     gpu_busy_percent and Steam's performance overlay reads exactly that file
+#   * CPU clock publisher, because the BC-250 kernel has no cpufreq driver and
+#     the overlay reads cpu*/cpufreq/scaling_cur_freq
 FROM josh5/steam-headless:2
 
 USER root
@@ -16,6 +20,18 @@ COPY rootfs/usr/local/bin/gamescope-no-force-grab \
 
 COPY rootfs/usr/local/bin/steam-controller-patch \
      /usr/local/bin/steam-controller-patch
+
+COPY rootfs/usr/local/bin/steam-gpu-load \
+     /usr/local/bin/steam-gpu-load
+
+COPY rootfs/usr/local/bin/steam-cpu-freq \
+     /usr/local/bin/steam-cpu-freq
+
+COPY rootfs/etc/systemd/system/steam-gpu-load.service \
+     /etc/systemd/system/steam-gpu-load.service
+
+COPY rootfs/etc/systemd/system/steam-cpu-freq.service \
+     /etc/systemd/system/steam-cpu-freq.service
 
 COPY rootfs/usr/local/sh-init.d/10-seed-sunshine-config.sh \
      /usr/local/sh-init.d/10-seed-sunshine-config.sh
@@ -32,15 +48,24 @@ COPY rootfs/etc/systemd/system/steam-headless-gamescope.service.d/50-no-force-gr
 RUN set -eux; \
     chmod 0755 /usr/local/bin/gamescope-no-force-grab \
                /usr/local/bin/steam-controller-patch \
+               /usr/local/bin/steam-gpu-load \
+               /usr/local/bin/steam-cpu-freq \
                /usr/local/sh-init.d/10-seed-sunshine-config.sh \
                /usr/local/sh-init.d/20-patch-steam-controller-base.sh; \
     chmod 0644 /etc/systemd/system/steam-headless-gamescope.service.d/50-no-force-grab-cursor.conf \
                /usr/share/steam-headless-custom/sunshine.conf \
                /usr/share/steam-headless-custom/apps.json; \
     bash -n /usr/local/bin/gamescope-no-force-grab; \
+    bash -n /usr/local/bin/steam-cpu-freq; \
     bash -n /usr/local/sh-init.d/10-seed-sunshine-config.sh; \
     bash -n /usr/local/sh-init.d/20-patch-steam-controller-base.sh; \
-    python3 -m py_compile /usr/local/bin/steam-controller-patch; \
-    rm -rf /usr/local/bin/__pycache__
+    python3 -m py_compile /usr/local/bin/steam-controller-patch \
+                          /usr/local/bin/steam-gpu-load; \
+    rm -rf /usr/local/bin/__pycache__; \
+    mkdir -p /etc/systemd/system/multi-user.target.wants; \
+    ln -sf /etc/systemd/system/steam-gpu-load.service \
+           /etc/systemd/system/multi-user.target.wants/steam-gpu-load.service; \
+    ln -sf /etc/systemd/system/steam-cpu-freq.service \
+           /etc/systemd/system/multi-user.target.wants/steam-cpu-freq.service
 
 # The image runs systemd as PID 1 with the stock entrypoint; keep it.

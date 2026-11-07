@@ -1,0 +1,19 @@
+[Unit]
+Description=Publish CPU clock for Steam's performance overlay
+Documentation=https://github.com/Naster17/steam-headless-bc250
+# The BC-250 kernel registers no cpufreq driver, so
+# /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq does not exist and Steam's
+# overlay shows a constant. This service shadows each cpuN directory inside the
+# container with a view that adds those files, fed from /proc/cpuinfo.
+After=local-fs.target
+Before=steam-headless-steam.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/steam-cpu-freq
+Restart=always
+RestartSec=2
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

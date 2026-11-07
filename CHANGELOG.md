@@ -3,6 +3,34 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.3.0] - 2026-11-07
+
+Steam's performance overlay reported impossible hardware numbers on the BC-250:
+GPU usage stuck around `655%`, CPU clock frozen at `1397 MHz`.
+
+### Added
+
+- `steam-gpu-load.service` — publishes GPU utilisation for Steam's overlay.
+  `gameoverlayui.so` reads `/sys/class/drm/card0/device/gpu_busy_percent`, and the
+  amdgpu driver answers that read with `EOPNOTSUPP` on GFX1013, so the overlay
+  showed garbage. The daemon computes the number the way `amdgpu_top` does: sum
+  of the `drm-engine-gfx` deltas from `/proc/<pid>/fdinfo/<fd>` over a 500 ms
+  window, written in place into a file bind-mounted over the sysfs path.
+  Measured: `0` for an idle desktop, `~63` for the animating gamepad UI, `100`
+  under `glmark2`.
+- `steam-cpu-freq.service` — publishes the CPU clock. The BC-250 kernel registers
+  no cpufreq driver, so `cpu*/cpufreq/scaling_cur_freq` does not exist and the
+  overlay showed a constant. The service shadows each existing
+  `/sys/devices/system/cpu/cpu<N>` inside the container with a view that symlinks
+  every real entry through `/run/cpu-real` and adds a real `cpufreq/` directory,
+  fed from `/proc/cpuinfo` (the same fallback btop uses). Container namespace
+  only; the host is untouched.
+
+### Notes
+
+- The GPU metrics file lives at `${SH2_DIR}/metrics/gpu_busy_percent` and must
+  exist before the container starts; see `docs/operations.md` §10.
+
 ## [1.2.3] - 2026-11-07
 
 Long press felt sluggish; the Quick Access Menu needed a full second.

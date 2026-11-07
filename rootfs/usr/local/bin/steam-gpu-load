@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Publish AMD GPU utilisation for Steam's performance overlay.
+
+Steam's overlay collects GPU stats in `gameoverlayui.so` (`CGPUStatsReaderDrm`)
+and reads exactly one sysfs file for utilisation:
+
+    /sys/class/drm/card0/device/gpu_busy_percent
+
+On the BC-250 (Cyan Skillfish APU, GFX1013) the amdgpu driver answers that read
+with `EOPNOTSUPP` ("Not supported"), so the overlay falls back to garbage and
+shows things like 655%. There is no per-ASIC switch to turn the counter on.
+
+amdgpu_top gets a correct number because it never asks the driver: it parses the
+per-client engine counters in `/proc/<pid>/fdinfo/<fd>`
+
+    drm-engine-gfx:   123456789 ns
+
+and divides the delta between two samples by the sample interval
+(`libamdgpu_top/src/stat/fdinfo/proc_info.rs::diff_usage`). This daemon does the
+same, sums the delta across every DRM client in the container, and publishes the
+result into a bind-mounted file that shadows `gpu_busy_percent` inside the
+container (see the volume in docker-compose.yml). Steam then reads a normal
+integer percentage.
+
+The value is written in place at a fixed width so a concurrent reader never sees
+a truncated file.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import time
+from pathlib import Path
+
+OUT = Path(os.environ.get("GPU_LOAD_FILE", "/run/gpu-metrics/gpu_busy_percent"))
+INTERVAL = float(os.environ.get("GPU_LOAD_INTERVAL", "0.5"))
+ENGINE = b"drm-engine-gfx:"
+WIDTH = 3  # "NN\n"
+
+
+def snapshot() -> dict[tuple[int, int], int]:
+    """Engine time (ns) per (pid, fd) for every amdgpu client in this namespace."""
+    usage: dict[tuple[int, int], int] = {}
+    proc = Path("/proc")
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        fdinfo = entry / "fdinfo"
+        try:
+            fds = os.listdir(fdinfo)
+        except OSError:
+            continue
+        for fd in fds:
+            try:
+                with open(fdinfo / fd, "rb") as handle:
+                    data = handle.read()
+            except OSError:
+                continue
+            if ENGINE not in data:
+                continue
+            for line in data.splitlines():
+                if not line.startswith(ENGINE):
+                    continue
+                value = line[len(ENGINE):].strip()
+                if value.endswith(b" ns"):
+                    value = value[:-3]
+                try:
+                    usage[(pid, int(fd))] = int(value)
+                except ValueError:
+                    pass
+                break
+    return usage
+
+
+def publish(percent: int) -> None:
+    payload = f"{percent:02d}\n".encode()
+    with open(OUT, "r+b") as handle:
+        handle.seek(0)
+        handle.write(payload)
+        handle.truncate(WIDTH)
+
+
+def main() -> int:
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    if not OUT.exists() or OUT.stat().st_size != WIDTH:
+        OUT.write_bytes(b"00\n")
+
+    previous = snapshot()
+    last = time.monotonic()
+    while True:
+        time.sleep(INTERVAL)
+        now = time.monotonic()
+        current = snapshot()
+        elapsed = now - last
+        last = now
+
+        total = 0
+        for key, value in current.items():
+            before = previous.get(key)
+            if before is None or value < before:
+                continue
+            total += value - before
+        previous = current
+
+        percent = 0
+        if elapsed > 0:
+            percent = min(100, int(total * 100 / (elapsed * 1_000_000_000)))
+        try:
+            publish(percent)
+        except OSError as exc:
+            print(f"cannot write {OUT}: {exc}", file=sys.stderr, flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(0)
