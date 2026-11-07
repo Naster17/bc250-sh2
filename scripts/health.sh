@@ -39,7 +39,9 @@ state=$(docker exec "$CONTAINER" systemctl is-active "$frontend" 2>/dev/null || 
 if [ "$state" = "active" ]; then ok "$frontend" "$state"; else bad "$frontend" "$state"; fi
 
 if [ "$mode" = "active" ]; then
-	argv=$(docker exec "$CONTAINER" sh -c 'tr "\0" "\n" < /proc/$(pgrep -x gamescope)/cmdline' 2>/dev/null || true)
+	# gamescope renames its process to gamescope-wl, so match the argv instead.
+	pid=$(docker exec "$CONTAINER" pgrep -f '^/usr/bin/gamescope' 2>/dev/null | head -n1)
+	argv=$(docker exec "$CONTAINER" sh -c "cat /proc/${pid:-0}/cmdline" 2>/dev/null | tr '\0' '\n')
 	case "$argv" in
 	*--force-grab-cursor*) bad "cursor fix" "--force-grab-cursor present" ;;
 	*--steam*) ok "cursor fix" "--force-grab-cursor absent" ;;

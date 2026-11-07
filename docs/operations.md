@@ -88,8 +88,9 @@ docker exec steam-headless systemctl is-active \
   steam-headless-shui steam-headless-plasma
 #   active active active active inactive
 
-docker exec steam-headless tr '\0' '\n' < /proc/$(docker exec steam-headless pgrep -x gamescope)/cmdline \
-  | grep -c force-grab-cursor          # 0 — the cursor fix is in effect
+# gamescope renames its process to gamescope-wl, so match the argv:
+docker exec steam-headless sh -c 'cat /proc/$(pgrep -f "^/usr/bin/gamescope")/cmdline' \
+  | tr '\0' '\n' | grep -c -- '--force-grab-cursor'      # 0 — the cursor fix is in effect
 
 docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
 curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8483/     # 401 = portal up
