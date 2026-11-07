@@ -391,6 +391,21 @@ cp /sys/class/drm/card0/device/gpu_metrics \
    "${SH2_DIR:-/opt/steam-headless}/metrics/gpu_metrics"   # 128-byte seed
 ```
 
+### GPU clock
+
+Both overlays read the clock from the amdgpu hwmon attribute
+`/sys/class/drm/card0/device/hwmon/hwmon<N>/freq1_input`, and on this board that
+read is unreliable: 200 rapid reads returned anything from `2` to `100` MHz with
+`2000` only occasionally, which is exactly the flickering `7 / 30 / 20 / 41 MHz`
+in the overlay. `gpu_metrics.current_gfxclk` (offset 76) is correct at the same
+moment.
+
+`steam-gpu-load` therefore bind-mounts its own file over `freq1_input` inside the
+container (namespace-local, idempotent, skipped when already mounted) and writes
+`current_gfxclk` from the driver table there every cycle, in Hz. Verified: ten
+consecutive reads return `2000000000` while the driver reports 2000 MHz, and the
+shadow survives container restarts because the service re-creates it.
+
 ### CPU clock
 
 Steam reads:

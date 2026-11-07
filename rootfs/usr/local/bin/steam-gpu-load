@@ -34,6 +34,7 @@ truncated file.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -41,11 +42,15 @@ from pathlib import Path
 OUT = Path(os.environ.get("GPU_LOAD_FILE", "/run/gpu-metrics/gpu_busy_percent"))
 METRICS_REAL = Path(os.environ.get("GPU_METRICS_REAL", "/run/gpu-device/gpu_metrics"))
 METRICS_OUT = Path(os.environ.get("GPU_METRICS_FILE", "/run/gpu-metrics/gpu_metrics"))
+FREQ_OUT = Path(os.environ.get("GPU_FREQ_FILE", "/run/gpu-metrics/freq1_input"))
+HWMON_ROOT = Path("/sys/class/hwmon")
 INTERVAL = float(os.environ.get("GPU_LOAD_INTERVAL", "0.5"))
 
 # `average_gfx_activity` in the 128-byte v2.x table: header 4 + gfx/soc
 # temperature 4 + core temperatures 16 + l3 temperatures 4.
 ACTIVITY_OFFSET = 28
+# `current_gfxclk` in MHz, right after the six average clock fields.
+GFXCLK_OFFSET = 76
 
 ENGINE = b"drm-engine-gfx:"
 CLIENT = b"drm-client-id:"
@@ -117,6 +122,62 @@ def publish(percent: int) -> None:
         handle.truncate(WIDTH)
 
 
+def clock_mhz() -> int | None:
+    """Current GFX clock from the driver table (MHz)."""
+    try:
+        table = METRICS_REAL.read_bytes()
+    except OSError:
+        return None
+    if len(table) < GFXCLK_OFFSET + 2:
+        return None
+    value = table[GFXCLK_OFFSET] | (table[GFXCLK_OFFSET + 1] << 8)
+    return value or None
+
+
+def amdgpu_hwmon_freq() -> Path | None:
+    """Path of the amdgpu hwmon `freq1_input`, whose reads are unreliable."""
+    for entry in HWMON_ROOT.glob("hwmon*"):
+        try:
+            if (entry / "name").read_text().strip() != "amdgpu":
+                continue
+        except OSError:
+            continue
+        candidate = entry / "freq1_input"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def shadow_freq(target: Path) -> None:
+    """Bind our own file over the glitchy sysfs attribute (idempotent).
+
+    `freq1_input` returns anything from 2 to 2000 MHz on this board, so the
+    overlays flicker through nonsense values. The mount is namespace-local.
+    """
+    if not FREQ_OUT.exists() or FREQ_OUT.stat().st_size < 2:
+        FREQ_OUT.write_text("0\n")
+    try:
+        if target.stat().st_ino == FREQ_OUT.stat().st_ino:
+            return
+    except OSError:
+        return
+    result = subprocess.run(
+        ["mount", "--bind", str(FREQ_OUT), str(target)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"cannot shadow {target}: {result.stderr.strip()}", file=sys.stderr, flush=True)
+
+
+def publish_freq(mhz: int) -> None:
+    with open(FREQ_OUT, "r+b") as handle:
+        handle.seek(0)
+        payload = f"{mhz * 1_000_000}\n".encode()
+        handle.write(payload)
+        handle.truncate(len(payload))
+
+
 def publish_metrics(percent: int) -> None:
     """Rewrite the shadowed table with the measured activity percentage."""
     try:
@@ -140,6 +201,13 @@ def main() -> int:
     if not OUT.exists() or OUT.stat().st_size != WIDTH:
         OUT.write_bytes(b"00\n")
     publish_metrics(0)
+
+    freq_path = amdgpu_hwmon_freq()
+    if freq_path is not None:
+        shadow_freq(freq_path)
+        clock = clock_mhz()
+        if clock:
+            publish_freq(clock)
 
     previous = snapshot()
     last = time.monotonic()
@@ -177,6 +245,9 @@ def main() -> int:
         try:
             publish(percent)
             publish_metrics(percent)
+            clock = clock_mhz()
+            if clock and freq_path is not None:
+                publish_freq(clock)
         except OSError as exc:
             print(f"cannot publish metrics: {exc}", file=sys.stderr, flush=True)
 

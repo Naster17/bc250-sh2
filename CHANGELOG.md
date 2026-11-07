@@ -3,6 +3,22 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.4] - 2026-11-08
+
+GPU clock in the overlay flickered through nonsense (`7 / 30 / 20 / 41 MHz`) while
+amdgpu_top reported a locked 2000 MHz.
+
+### Fixed
+
+- **`hwmon3/freq1_input` is unreliable on this board.** 200 rapid reads returned
+  values between 2 and 100 MHz with 2000 only occasionally, and both overlays read
+  exactly that attribute. `gpu_metrics.current_gfxclk` (offset 76) is correct at
+  the same moment.
+- `steam-gpu-load` now bind-mounts its own file over `freq1_input` inside the
+  container (namespace-local, idempotent) and publishes `current_gfxclk` there in
+  Hz each cycle. Verified: ten consecutive reads return `2000000000` after a
+  container restart, matching amdgpu_top.
+
 ## [1.4.3] - 2026-11-08
 
 ### Added
