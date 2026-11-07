@@ -3,6 +3,28 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.0] - 2026-11-08
+
+Release hygiene and the last two overlay metrics.
+
+### Changed
+
+- **Base image pinned by digest** (`josh5/steam-headless:2@sha256:c60f4d72…`). The
+  tag is mutable and the deltas assume an exact filesystem layout; bump tag and
+  digest together.
+- README and `docs/operations.md` describe the metric publishers, the 500 ms
+  controller long press, and the custom animation directory (§16).
+- `docs/operations.md` gained the black-gamepad-UI recovery note (restart
+  `steam-headless-steam` after a container recreate).
+
+### Added
+
+- Documentation for custom boot/suspend animations: Steam reads
+  `~/.local/share/Steam/config/uioverrides/movies/*.webm`, with
+  `deck-suspend-animation.webm` and
+  `deck-suspend-animation-from-throbber.webm` for the sleep clips. The media
+  itself is personal and stays out of the repository.
+
 ## [1.3.2] - 2026-11-08
 
 GPU usage now moved, but read far too high: the overlay showed `75-85%` while

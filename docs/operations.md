@@ -529,3 +529,28 @@ Never delete `/var/lib/steam-headless/installation.json` or `/home/steamheadless
 | `Couldn't set default-sink [auto_null]: No such entity` | harmless, logged when a session ends |
 | container exits immediately | `docker logs steam-headless`: missing `/dev/uhid`, dropped `cgroup: private` / `writable-cgroups=true`, wrong `stop_signal` |
 | wrong file ownership inside container | `PUID`/`PGID` must equal `id -u` / `id -g` of the host owner of `SH2_DIR` |
+
+## 16. Custom boot / suspend animations
+
+Steam scans one directory for local startup movies and lists every `.webm` in it
+under *Settings → Customization → Startup movie*:
+
+```text
+/home/steamheadless/.local/share/Steam/config/uioverrides/movies/
+# host side: ${SH2_DIR}/data/home/.local/share/Steam/config/uioverrides/movies/
+```
+
+Files must be readable by the `steamheadless` account (uid 1000 on the host side
+as well). A Steam restart is the reliable way to refresh the list and the
+generated thumbnails; opening the customization page usually rescans on its own.
+
+Naming conventions used by SteamOS for the sleep clips:
+
+| File | Played |
+|---|---|
+| any `*.webm` | selectable startup movie |
+| `deck-suspend-animation.webm` | suspend animation when no game is running |
+| `deck-suspend-animation-from-throbber.webm` | suspend animation while a game is running |
+
+These are personal media and are deliberately kept out of the repository — only
+code, units and documentation are versioned here.

@@ -25,7 +25,10 @@ flowchart LR
 | `rootfs/usr/local/sh-init.d/10-seed-sunshine-config.sh` | On boot, seeds `~/.config/sunshine/{sunshine.conf,apps.json}` from the defaults below, only if absent. |
 | `rootfs/usr/share/steam-headless-custom/sunshine.conf` | `encoder = software`, `capture = kwin`, `upnp = disabled`, no display-mode prep command. |
 | `rootfs/usr/share/steam-headless-custom/apps.json` | Two stream-only tiles: `Desktop` and `Steam \| Game Mode` (no `cmd`, so nothing spawns a second Steam). |
-| `rootfs/usr/local/bin/steam-controller-patch` + `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | Adds a **1000 ms long-press on Select → Quick Access Menu** (`controller_action system_key_1`, the right-hand panel with Performance/Friends) to the default Big Picture, Desktop and per-game Xbox layouts. Useful when the controller's Guide button is unreliable, since Steam's own chords all require Guide. Every patched file keeps its exact original byte size — Steam verifies `controller_base` against its depot manifest and re-extracts mismatching files. Re-applied on every boot, because a Steam client update restores the stock files. |
+| `rootfs/usr/local/bin/steam-controller-patch` + `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | Adds a **500 ms long-press on Select → Quick Access Menu** (`controller_action system_key_1`, the right-hand panel with Performance/Friends) to the default Big Picture, Desktop and per-game Xbox layouts. Useful when the controller's Guide button is unreliable, since Steam's own chords all require Guide. Every patched file keeps its exact original byte size — Steam verifies `controller_base` against its depot manifest and re-extracts mismatching files. Re-applied on every boot, because a Steam client update restores the stock files. |
+
+| `rootfs/usr/local/bin/steam-gpu-load` + `rootfs/etc/systemd/system/steam-gpu-load.service` | Publishes GPU utilisation. The BC-250 driver answers `gpu_busy_percent` with `EOPNOTSUPP`, and the `gpu_metrics` table reports `0xFFFF` for `average_gfx_activity`, which MangoHud divides by 100 and renders as `655%`. The daemon rewrites both nodes inside the container from the driver's own centipercent value, falling back to per-`drm-client-id` `drm-engine-gfx` deltas. |
+| `rootfs/usr/local/bin/steam-cpu-freq` + `rootfs/etc/systemd/system/steam-cpu-freq.service` | Publishes the CPU clock. The BC-250 kernel registers no cpufreq driver, so `cpu*/cpufreq/scaling_cur_freq` does not exist and the overlay shows a constant. The service shadows each `cpuN` directory with a view that adds those files, fed from `/proc/cpuinfo`. |
 
 Runtime knobs live in `docker-compose.yml`:
 
@@ -90,11 +93,28 @@ docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
   them as non-Steam shortcuts inside Steam instead.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
-- **Controller:** holding `Select` for one second opens Steam's Quick Access Menu
+- **Controller:** holding `Select` for 500 ms opens Steam's Quick Access Menu
   on any controller whose Guide button is flaky; a short `Select` press still goes
   to the game. The binding lives in Steam's default layouts, so it applies to the
   gamepad UI, the desktop and games alike — see
   [docs/operations.md](docs/operations.md#9-controller-long-press-select--quick-access-menu).
+
+## Custom boot / suspend animations
+
+Personal media is deliberately **not** in this repository. Steam reads custom
+startup movies from a directory inside the home volume, and every `.webm` there
+shows up under *Settings → Customization → Startup movie*:
+
+```bash
+# host path (SH2_DIR/data/home is mounted at /home/steamheadless)
+$SH2_DIR/data/home/.local/share/Steam/config/uioverrides/movies/
+```
+
+Drop the files in as the `steamheadless` user (uid 1000) and restart Steam once so
+the list and thumbnails refresh. SteamOS names its suspend clips
+`deck-suspend-animation.webm` (out of game) and
+`deck-suspend-animation-from-throbber.webm` (while a game runs); the boot clip is
+whatever file you select in the customization page.
 
 ## Repository layout
 
@@ -108,8 +128,10 @@ CHANGELOG.md
 rootfs/
   etc/systemd/system/steam-headless-gamescope.service.d/50-no-force-grab-cursor.conf
   usr/local/bin/gamescope-no-force-grab
-  usr/local/sh-init.d/10-seed-sunshine-config.sh
+  usr/local/bin/{gamescope-no-force-grab,steam-controller-patch,steam-gpu-load,steam-cpu-freq}
+  usr/local/sh-init.d/{10-seed-sunshine-config.sh,20-patch-steam-controller-base.sh}
   usr/share/steam-headless-custom/{sunshine.conf,apps.json}
+  etc/systemd/system/{steam-headless-gamescope.service.d/50-no-force-grab-cursor.conf,steam-gpu-load.service,steam-cpu-freq.service}
 ```
 
 ## License / credits

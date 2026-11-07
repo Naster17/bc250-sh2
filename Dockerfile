@@ -11,7 +11,10 @@
 #     gpu_busy_percent and Steam's performance overlay reads exactly that file
 #   * CPU clock publisher, because the BC-250 kernel has no cpufreq driver and
 #     the overlay reads cpu*/cpufreq/scaling_cur_freq
-FROM josh5/steam-headless:2
+# Pinned by digest: the tag is mutable, and the deltas below assume this exact
+# filesystem layout (systemd units in /usr/lib/systemd/system, Steam under
+# /home/steamheadless). Bump both tag and digest together.
+FROM josh5/steam-headless:2@sha256:c60f4d7243a4d94515f722441fff90b752413bf6a45bb221c9a4ed55bc4d9108
 
 USER root
 
