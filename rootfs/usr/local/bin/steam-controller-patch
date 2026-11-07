@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
 """Add "long press Select -> Quick Access Menu" to Steam's shipped controller configs.
 
-Steam's default layouts map the physical Back/Select button to START/SELECT with a
-plain Full_Press activator only. We insert one extra activator:
+Steam's default layouts map the physical Back/Select button to SELECT with a plain
+Full_Press activator only. We insert one extra activator:
 
     "Long_Press" { binding "controller_action system_key_1" ; long_press_time 1000 }
 
 `system_key_1` is Steam's Quick Access Menu action (the right-hand panel with
 Performance, Friends, notifications) - the same action the stock Xbox chord config
 binds to Guide+A in chord_xboxone.vdf.
+
+Which input is Select? Valve's naming is inverted relative to the printed labels.
+In the shipped layouts (`basicui.vdf`, `basicui_gamepad.vdf`, `desktop_xboxone.vdf`):
+
+    "button_escape"  ->  game_action Default START   /  key_press ESCAPE   (Start)
+    "button_menu"    ->  game_action Default SELECT  /  key_press TAB      (Select)
+
+so the physical Select button is the `"button_menu"` input, and the physical Start
+button is `"button_escape"`. Binding the long press to `button_escape` opens the
+Quick Access Menu on Start instead of Select. TARGET_INPUT below is therefore
+`"button_menu"`.
 
 Two hard requirements learned the hard way:
 
@@ -25,11 +36,12 @@ Two hard requirements learned the hard way:
 
 Everything is validated with a built-in KeyValues parser before anything is
 written; a file that does not parse, or that ends up with duplicate activators,
-is left untouched.
+is left untouched. Blocks are first removed wherever they already are, so
+changing TARGET_INPUT retargets an already patched file in place (same bytes in,
+same bytes out).
 
 Short presses are untouched: an extra activator does not change Full_Press.
-The script is idempotent (files already carrying system_key_1 are skipped) and is
-re-run from /usr/local/sh-init.d on every boot.
+The script is idempotent and is re-run from /usr/local/sh-init.d on every boot.
 
 Usage: steam-controller-patch [--steam-home DIR] [--dry-run] [--verbose]
 """
@@ -48,7 +60,7 @@ TARGETS = (
 )
 
 MARKER = "system_key_1"
-INPUT_END = ('"button_menu"', '"left_bumper"', '"right_bumper"')
+TARGET_INPUT = '"button_menu"'
 
 
 class KVError(Exception):
@@ -90,17 +102,14 @@ def validate(text: str) -> None:
     """Raise KVError unless the text is KeyValues Steam can load."""
     tokens = list(tokenize(text))
     pos = 0
-    stack: list[dict[str, int]] = [{}]
-
-    def counts() -> dict[str, int]:
-        return stack[-1]
+    depth = 0
 
     while pos < len(tokens):
         kind, value = tokens[pos]
         if kind == "}":
-            if len(stack) == 1:
+            depth -= 1
+            if depth < 0:
                 raise KVError("unbalanced closing brace")
-            stack.pop()
             pos += 1
             continue
         if kind != "str":
@@ -111,57 +120,31 @@ def validate(text: str) -> None:
             raise KVError(f"key {key!r} without a value")
         kind2, value2 = tokens[pos]
         if kind2 == "{":
-            stack.append({})
+            if key == "activators":
+                names: dict[str, int] = {}
+                inner = pos + 1
+                inner_depth = 1
+                while inner < len(tokens) and inner_depth:
+                    k2, v2 = tokens[inner]
+                    if k2 == "{":
+                        inner_depth += 1
+                    elif k2 == "}":
+                        inner_depth -= 1
+                    elif inner_depth == 1 and k2 == "str":
+                        names[v2] = names.get(v2, 0) + 1
+                    inner += 1
+                for name, count in names.items():
+                    if count > 1:
+                        raise KVError(f"duplicate activator {name!r}")
+            depth += 1
             pos += 1
         elif kind2 == "str":
-            if key in counts():
-                counts()[key] += 1
-            else:
-                counts()[key] = 1
             pos += 1
         else:
             raise KVError(f"unexpected token {value2!r} after key {key!r}")
 
-    if len(stack) != 1:
+    if depth:
         raise KVError("unbalanced opening brace")
-
-    # Duplicate activator names inside one activators block break Steam's loader.
-    stack = [{}]
-    pos = 0
-    while pos < len(tokens):
-        kind, value = tokens[pos]
-        if kind == "}":
-            stack.pop()
-            pos += 1
-            continue
-        if kind != "str":
-            raise KVError("unexpected token")
-        key = value
-        pos += 1
-        kind2, value2 = tokens[pos]
-        if kind2 == "{":
-            block: dict[str, int] = {}
-            if key == "activators":
-                inner = pos + 1
-                depth = 1
-                while inner < len(tokens) and depth:
-                    k2, v2 = tokens[inner]
-                    if k2 == "{":
-                        depth += 1
-                    elif k2 == "}":
-                        depth -= 1
-                    elif depth == 1 and k2 == "str":
-                        nxt = tokens[inner + 1] if inner + 1 < len(tokens) else None
-                        if nxt and nxt[0] in ("str", "{"):
-                            block[v2] = block.get(v2, 0) + 1
-                    inner += 1
-                for name, count in block.items():
-                    if count > 1:
-                        raise KVError(f"duplicate activator {name!r}")
-            stack.append(block)
-            pos += 1
-        else:
-            pos += 1
 
 
 def block_for(newline: str) -> str:
@@ -181,35 +164,139 @@ def block_for(newline: str) -> str:
     return newline.join(lines) + newline
 
 
-def strip_indentation(lines: list[str], budget: int) -> int:
-    remaining = budget
-    for index, line in enumerate(lines):
-        if remaining <= 0:
-            break
-        body = line.rstrip("\r\n")
-        stripped = body.lstrip(" \t")
-        indent = len(body) - len(stripped)
-        if indent <= 0:
+def enclosing_key(lines: list[str], index: int) -> str | None:
+    """Key of the block that contains line `index`."""
+    depth = 0
+    for k in range(index - 1, -1, -1):
+        s = lines[k].strip()
+        if s == "}":
+            depth += 1
+        elif s == "{":
+            if depth == 0:
+                for j in range(k - 1, -1, -1):
+                    candidate = lines[j].strip()
+                    if candidate:
+                        return candidate
+                return None
+            depth -= 1
+    return None
+
+
+def strip_blocks(lines: list[str]) -> tuple[list[str], int]:
+    """Remove every marker block that is not already under TARGET_INPUT."""
+    drop = [False] * len(lines)
+    removed = 0
+    i = 0
+    while i < len(lines):
+        if "controller_action system_key_1" not in lines[i]:
+            i += 1
             continue
-        take = min(indent, remaining)
-        lines[index] = line[take:]
-        remaining -= take
-    return remaining
+
+        start = None
+        for k in range(i, max(-1, i - 6), -1):
+            if lines[k].strip() == '"Long_Press"':
+                start = k
+                break
+        if start is None:
+            i += 1
+            continue
+
+        # innermost block around the line above Long_Press is the input itself
+        if enclosing_key(lines, start - 1) == TARGET_INPUT:
+            i += 1
+            continue
+
+        depth = 0
+        opened = False
+        end = None
+        for j in range(start, len(lines)):
+            s = lines[j].strip()
+            if "{" in s:
+                opened = True
+            depth += s.count("{") - s.count("}")
+            if opened and depth <= 0:
+                end = j
+                break
+        if end is None:
+            i += 1
+            continue
+
+        for k in range(start, end + 1):
+            drop[k] = True
+        removed += 1
+        i = end + 1
+
+    return [line for index, line in enumerate(lines) if not drop[index]], removed
 
 
-def activators_body(lines: list[str], start: int) -> str:
+def activators_of(lines: list[str], start: int) -> tuple[int, int] | None:
+    """Return (brace_index, body_end) of the activators block opening at `start`."""
     depth = 0
     opened = False
-    collected: list[str] = []
-    for k in range(start, len(lines)):
-        s = lines[k].strip()
+    for j in range(start, len(lines)):
+        s = lines[j].strip()
         if "{" in s:
             opened = True
         depth += s.count("{") - s.count("}")
-        collected.append(lines[k])
         if opened and depth <= 0:
-            break
-    return "".join(collected)
+            return start, j
+    return None
+
+
+def insert_block(lines: list[str], newline: str) -> tuple[list[str], int, int]:
+    """Insert the activator into TARGET_INPUT. Returns (lines, inserted, skipped)."""
+    out: list[str] = []
+    inserted = 0
+    skipped = 0
+    i = 0
+    while i < len(lines):
+        out.append(lines[i])
+        if lines[i].strip() != TARGET_INPUT:
+            i += 1
+            continue
+
+        # locate this input's own activators block, not a sibling's
+        j = i + 1
+        if j >= len(lines) or lines[j].strip() != "{":
+            i += 1
+            continue
+        body_start = j
+        found = None
+        depth = 0
+        k = j
+        while k < len(lines):
+            s = lines[k].strip()
+            depth += s.count("{") - s.count("}")
+            if k > body_start and s == '"activators"' and depth == 1:
+                if k + 1 < len(lines) and lines[k + 1].strip() == "{":
+                    found = k + 1
+                    break
+            if depth <= 0:
+                break
+            k += 1
+        if found is None:
+            i += 1
+            continue
+
+        span = activators_of(lines, found)
+        if span is None:
+            i += 1
+            continue
+        _brace, body_end = span
+        body = "".join(lines[found:body_end + 1])
+
+        while i < found:                      # copy up to and including the brace
+            i += 1
+            out.append(lines[i])
+
+        if MARKER in body or '"Long_Press"' in body:
+            skipped += 1
+        else:
+            out.append(block_for(newline))
+            inserted += 1
+        i += 1
+
+    return out, inserted, skipped
 
 
 def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
@@ -217,68 +304,45 @@ def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
     original_size = len(raw)
     text = raw.decode("utf-8", "surrogateescape")
     newline = "\r\n" if "\r\n" in text else "\n"
-    lines = text.splitlines(keepends=True)
 
-    out: list[str] = []
-    inserted = 0
-    skipped = 0
-    i = 0
-    while i < len(lines):
-        out.append(lines[i])
-        if lines[i].strip() != '"button_escape"':
-            i += 1
-            continue
+    lines, removed = strip_blocks(text.splitlines(keepends=True))
+    if removed and verbose:
+        print(f"  {path.name}: removed {removed} stale blocks")
 
-        j = i + 1
-        while j < len(lines) and lines[j].strip() not in INPUT_END:
-            if lines[j].strip() == '"activators"':
-                break
-            j += 1
-        if j >= len(lines) or lines[j].strip() != '"activators"':
-            i += 1
-            continue
+    lines, inserted, skipped = insert_block(lines, newline)
+    patched = "".join(lines)
+    delta = len(patched.encode("utf-8", "surrogateescape")) - original_size
 
-        while i < j:                       # copy everything up to "activators"
-            i += 1
-            out.append(lines[i])
-        if i + 1 >= len(lines) or lines[i + 1].strip() != "{":
-            i += 1
-            continue
-        i += 1                             # and the brace that opens it
-        out.append(lines[i])
-
-        body = activators_body(lines, i + 1)
-        if MARKER in body:
-            skipped += 1
-        elif '"Long_Press"' in body:
-            skipped += 1
-        else:
-            out.append(block_for(newline))
-            inserted += 1
-        i += 1
-
-    if not inserted:
+    if not inserted and not removed:
         return 0, f"nothing to do ({skipped} inputs already covered, {original_size} bytes)"
 
-    patched = "".join(out)
     try:
         validate(patched)
     except KVError as exc:
         return 0, f"refusing to write, invalid result: {exc}"
 
-    delta = len(patched.encode("utf-8", "surrogateescape")) - original_size
-    if verbose:
-        print(f"  {path.name}: {inserted} inserts, delta {delta:+d} bytes")
     if delta > 0:
         balanced = patched.splitlines(keepends=True)
-        left = strip_indentation(balanced, delta)
+        remaining = delta
+        for index, line in enumerate(balanced):
+            if remaining <= 0:
+                break
+            body = line.rstrip("\r\n")
+            indent = len(body) - len(body.lstrip(" \t"))
+            if indent <= 0:
+                continue
+            take = min(indent, remaining)
+            balanced[index] = line[take:]
+            remaining -= take
         patched = "".join(balanced)
-        if left:
-            return 0, f"cannot balance size, {left} bytes short"
+        if remaining:
+            return 0, f"cannot balance size, {remaining} bytes short"
         try:
             validate(patched)
         except KVError as exc:
             return 0, f"refusing to write, invalid after balancing: {exc}"
+    elif delta < 0:
+        patched = patched + " " * (-delta)
 
     final_size = len(patched.encode("utf-8", "surrogateescape"))
     if final_size != original_size:
@@ -286,7 +350,12 @@ def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
 
     if not dry_run:
         path.write_bytes(patched.encode("utf-8", "surrogateescape"))
-    return inserted, f"size kept at {final_size} bytes, {skipped} inputs skipped"
+    note = f"size kept at {final_size} bytes"
+    if removed:
+        note += f", {removed} blocks retargeted"
+    if skipped:
+        note += f", {skipped} inputs skipped"
+    return inserted, note
 
 
 def main() -> int:

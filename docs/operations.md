@@ -242,16 +242,26 @@ docker exec steam-headless gst-inspect-1.0 va | tail -3
 Steam's system chords are hardcoded to the Guide button (`chord_xboxone.vdf`:
 Guide+A = `system_key_1`, Guide+B hold = `quit_application`), which is useless
 when that button is worn out. The image therefore adds one extra activator to
-Steam's shipped default layouts:
+Steam's shipped default layouts, with Valve's (inverted) input names:
 
 ```text
-"button_escape" (Select)
+"button_menu"  ->  game_action Default SELECT   # the physical Select/Back button
   Long_Press (1000 ms) -> controller_action system_key_1   # Quick Access Menu
+
+"button_escape" ->  game_action Default START   # the physical Start/Menu button
+  (left alone)
 ```
 
 `system_key_1` is exactly what Guide+A opens: the right-hand panel with
 Performance, Friends and notifications. Short presses are untouched, so Select
 still reaches the game.
+
+The naming trap: `button_escape` sounds like Back/Select but the shipped gamepad
+layout binds it to `Default START`, while `button_menu` is `Default SELECT`.
+Binding the long press to `button_escape` opens the panel on Start instead of
+Select. `TARGET_INPUT` in the patcher is therefore `"button_menu"`; changing it
+retargets already patched files in place (the block is removed from wherever it
+was and re-inserted, keeping the byte size identical).
 
 | File in the image | Role |
 |---|---|
@@ -287,7 +297,7 @@ Steam log `CPrepareConfigWorker failed for AppID 769` /
 `No config for controller found locally` and **the whole pad stops working** in
 the gamepad UI, not just the new binding. Two traps that produced exactly that:
 
-- dropping the `{` that opens a `"button_escape"` block while inserting;
+- dropping the `{` that opens an input block while inserting;
 - adding a second `"Long_Press"` to an input that already has one.
 
 If the pad is dead after an edit, check those log lines first, then restore the

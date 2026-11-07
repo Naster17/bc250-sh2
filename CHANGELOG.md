@@ -3,6 +3,22 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.2.2] - 2026-11-07
+
+The Quick Access Menu opened on **Start** instead of **Select**.
+
+### Fixed
+
+- **Wrong input targeted.** The patch bound `Long_Press` to `"button_escape"`,
+  but the shipped layouts map `"button_escape"` to `game_action Default START`
+  and `"button_menu"` to `Default SELECT`. `TARGET_INPUT` is now
+  `"button_menu"`, so holding Select opens the panel and Start is untouched
+  again.
+- **Retargeting instead of skip.** Blocks are now removed from wherever they
+  already are before insertion, so pointing the patcher at a different input
+  moves an existing patch in place; the byte size stays identical and a second
+  run reports `nothing to do`.
+
 ## [1.2.1] - 2026-11-07
 
 Fix for a regression introduced by 1.2.0: the gamepad stopped working in the
