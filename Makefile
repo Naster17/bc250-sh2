@@ -24,8 +24,9 @@ dirs: env ## Create host directories and the metric seed files compose mounts
 		if [ -r /sys/class/drm/card0/device/gpu_metrics ]; then \
 			cp /sys/class/drm/card0/device/gpu_metrics "$$base/metrics/gpu_metrics"; \
 		else \
-			python3 -c "import struct,sys; sys.stdout.buffer.write(struct.pack('<HBB', 128, 2, 2) + b'\xff' * 124)" \
+			{ printf '\\200\\000\\002\\002'; head -c 124 /dev/zero | tr '\\0' '\\377'; } \
 				> "$$base/metrics/gpu_metrics"; \
+			printf '\\000\\000' | dd of="$$base/metrics/gpu_metrics" bs=1 seek=28 conv=notrunc 2>/dev/null; \
 		fi; \
 	fi; \
 	echo "host paths ready under $$base"

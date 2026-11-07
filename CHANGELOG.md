@@ -3,6 +3,21 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.3] - 2026-11-08
+
+### Added
+
+- `docs/operations.md` §17: cold boot / fresh deploy contract — every mount source
+  and why it exists, plus what `restart: unless-stopped` does on reboot.
+
+### Changed
+
+- `make dirs` generates the `gpu_metrics` seed without needing `python3` on the
+  host (`printf` + `head`/`tr`, activity field zeroed so a stopped publisher can
+  never render `655%`).
+- `steam-cpu-freq` exits early when the kernel already provides a cpufreq driver,
+  so the shadow view never overrides real per-core frequencies on other boards.
+
 ## [1.4.2] - 2026-11-08
 
 ### Added

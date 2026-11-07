@@ -28,6 +28,13 @@ INTERVAL=${CPU_FREQ_INTERVAL:-1}
 BASE_KHZ=${CPU_BASE_KHZ:-3500000}
 FLOOR_KHZ=${CPU_FLOOR_KHZ:-1400000}
 
+# If the kernel does register a cpufreq driver, the real files already exist and
+# are authoritative - do not shadow them.
+if [ -e /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]; then
+    echo "cpufreq driver present, nothing to publish"
+    exit 0
+fi
+
 mkdir -p "${REAL}" "${VIEW}"
 
 if ! mountpoint -q "${REAL}"; then

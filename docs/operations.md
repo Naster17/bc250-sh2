@@ -555,3 +555,37 @@ Naming conventions used by SteamOS for the sleep clips:
 
 These are personal media and are deliberately kept out of the repository — only
 code, units and documentation are versioned here.
+
+## 17. Cold boot and fresh deploy
+
+Every bind-mount source must exist *before* the container is created; Docker
+creates missing sources, and inside sysfs that fails with
+`operation not permitted`, which aborts the whole container. The current set:
+
+| Source | Exists because |
+|---|---|
+| `/etc/localtime` | host configuration |
+| `${SH2_DIR}/{data/home,games,state,journal}` | `make dirs` (`make up` depends on it) |
+| `${SH2_DIR}/metrics/gpu_busy_percent` | `make dirs`, 3-byte seed |
+| `${SH2_DIR}/metrics/gpu_metrics` | `make dirs`, 128-byte seed copied from the live table |
+| `/sys/class/drm/card0/device` | amdgpu probes during kernel init, long before Docker starts |
+
+Verified by removing the container completely and running `make up`: it creates,
+starts, both metric units come up, `health=healthy checks=33`, `/dev/input` has
+Steam's virtual gamepad.
+
+`restart: unless-stopped` makes a reboot even simpler — Docker restarts the
+existing container and does not re-resolve the mounts.
+
+### Portability
+
+This compose targets an AMD GPU with the BC-250 kernel:
+
+- the GPU publisher expects an amdgpu `gpu_metrics` v2 table
+  (`/sys/class/drm/card0/device/gpu_metrics`) and MangoHud as the overlay;
+- on a system with a working cpufreq driver, `steam-cpu-freq` exits immediately
+  and leaves the real files alone;
+- on a system without `/sys/class/drm/card0/device/gpu_metrics` (e.g. NVIDIA),
+  Docker would try to create that path inside sysfs and fail — remove the two
+  metric mounts from `docker-compose.yml` there.
+
