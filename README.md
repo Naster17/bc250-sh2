@@ -60,9 +60,15 @@ password, set the permanent one, then connect a Moonlight client and pick a tile
 ## Verify
 
 ```bash
+make verify     # container, units, session mode, cursor flag, portal, GameStream
+make health     # raw steam-headless-healthcheck output
+```
+
+Raw checks, if you prefer:
+
+```bash
 docker exec steam-headless /usr/local/bin/steam-headless-healthcheck   # health=healthy checks=33
 docker exec steam-headless cat /run/steam-headless/session/state.json  # currentMode: gaming
-docker exec steam-headless tr '\0' '\n' < /proc/$(docker exec steam-headless pgrep -x gamescope)/cmdline | grep -c force-grab-cursor  # 0
 docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
 ```
 
@@ -89,8 +95,10 @@ docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
 ```
 Dockerfile
 docker-compose.yml
-.env.example
+Makefile                  # up/build/logs/mode-*/reset-sunshine/backup/verify
+scripts/health.sh         # read-only readiness check (make verify)
 docs/operations.md        # full ops manual: ports, Sunshine resets, modes, troubleshooting
+CHANGELOG.md
 rootfs/
   etc/systemd/system/steam-headless-gamescope.service.d/50-no-force-grab-cursor.conf
   usr/local/bin/gamescope-no-force-grab
