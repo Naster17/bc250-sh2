@@ -77,5 +77,5 @@ if [ "$fail" -eq 0 ]; then
 	echo "RESULT: OK"
 	exit 0
 fi
-echo "RESULT: FAILED - see docs/operations.md section 13"
+echo "RESULT: FAILED - see docs/operations.md section 14"
 exit 1

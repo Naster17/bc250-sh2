@@ -25,6 +25,7 @@ flowchart LR
 | `rootfs/usr/local/sh-init.d/10-seed-sunshine-config.sh` | On boot, seeds `~/.config/sunshine/{sunshine.conf,apps.json}` from the defaults below, only if absent. |
 | `rootfs/usr/share/steam-headless-custom/sunshine.conf` | `encoder = software`, `capture = kwin`, `upnp = disabled`, no display-mode prep command. |
 | `rootfs/usr/share/steam-headless-custom/apps.json` | Two stream-only tiles: `Desktop` and `Steam \| Game Mode` (no `cmd`, so nothing spawns a second Steam). |
+| `rootfs/usr/local/bin/steam-controller-patch` + `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | Adds a **1000 ms long-press on Select → Quick Access Menu** (`controller_action system_key_1`, the right-hand panel with Performance/Friends) to the default Big Picture, Desktop and per-game Xbox layouts. Useful when the controller's Guide button is unreliable, since Steam's own chords all require Guide. Every patched file keeps its exact original byte size — Steam verifies `controller_base` against its depot manifest and re-extracts mismatching files. Re-applied on every boot, because a Steam client update restores the stock files. |
 
 Runtime knobs live in `docker-compose.yml`:
 
@@ -89,6 +90,11 @@ docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
   them as non-Steam shortcuts inside Steam instead.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
+- **Controller:** holding `Select` for one second opens Steam's Quick Access Menu
+  on any controller whose Guide button is flaky; a short `Select` press still goes
+  to the game. The binding lives in Steam's default layouts, so it applies to the
+  gamepad UI, the desktop and games alike — see
+  [docs/operations.md](docs/operations.md#9-controller-long-press-select--quick-access-menu).
 
 ## Repository layout
 

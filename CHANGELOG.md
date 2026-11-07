@@ -3,6 +3,32 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.2.0] - 2026-11-07
+
+Long-press Select opens the Quick Access Menu, so a worn Guide button no longer
+blocks Performance/Friends/notifications.
+
+### Added
+
+- `rootfs/usr/local/bin/steam-controller-patch`: inserts a `Long_Press` activator
+  (1000 ms) on Select bound to `controller_action system_key_1` into Steam's
+  `controller_base/basicui.vdf`, `basicui_gamepad.vdf`, `desktop_xboxone.vdf` and
+  `templates/controller_xboxone_gamepad_joystick.vdf` — i.e. gamepad UI, desktop
+  and default per-game layouts.
+- `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh`: re-applies the
+  patch on every container start (Steam client updates restore the stock files).
+
+### Fixed
+
+- **Patch reverted by Steam's integrity check**: `BVerifyInstalledFiles` compares
+  `controller_base` sizes with the depot manifest and re-extracts mismatches. The
+  patcher now keeps every file byte-identical in length by removing exactly the
+  number of leading indentation characters it inserts (KeyValues ignores
+  whitespace), so verification passes and the binding survives restarts.
+- **CRLF handling**: the shipped VDFs use `\r\n`; reading them in text mode
+  silently shrank every file by one byte per line and triggered the repair path.
+  The patcher now reads and writes bytes and preserves the file's newline style.
+
 ## [1.1.0] - 2026-11-07
 
 SteamOS-like gaming mode, our own image, cursor fix.

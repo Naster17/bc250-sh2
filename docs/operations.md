@@ -237,7 +237,58 @@ docker exec steam-headless vainfo
 docker exec steam-headless gst-inspect-1.0 va | tail -3
 ```
 
-## 9. Managed Sunshine config
+## 9. Controller: long-press Select → Quick Access Menu
+
+Steam's system chords are hardcoded to the Guide button (`chord_xboxone.vdf`:
+Guide+A = `system_key_1`, Guide+B hold = `quit_application`), which is useless
+when that button is worn out. The image therefore adds one extra activator to
+Steam's shipped default layouts:
+
+```text
+"button_escape" (Select)
+  Long_Press (1000 ms) -> controller_action system_key_1   # Quick Access Menu
+```
+
+`system_key_1` is exactly what Guide+A opens: the right-hand panel with
+Performance, Friends and notifications. Short presses are untouched, so Select
+still reaches the game.
+
+| File in the image | Role |
+|---|---|
+| `/usr/local/bin/steam-controller-patch` | inserts the activator into `basicui.vdf`, `basicui_gamepad.vdf`, `desktop_xboxone.vdf` and `templates/controller_xboxone_gamepad_joystick.vdf` (Big Picture, Desktop and default per-game layouts) |
+| `/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | re-runs it on every container start |
+
+Two constraints shaped the implementation:
+
+1. **Steam verifies file sizes.** At startup it logs
+   `BVerifyInstalledFiles: controller_base/desktop_xboxone.vdf is N bytes, expected 7924`
+   and later re-extracts mismatching files from the depot, silently reverting the
+   patch. KeyValues ignores whitespace, so the patcher removes exactly as many
+   leading indentation characters as it inserts and every file keeps its original
+   byte length — no mismatch line, no repair.
+2. **Files are CRLF.** They must be read and written as bytes; a text-mode
+   round-trip converts `\r\n` to `\n` and breaks the size (and the repair).
+
+Verify:
+
+```bash
+C=/home/steamheadless/.local/share/Steam/controller_base
+docker exec steam-headless grep -c system_key_1 \
+  $C/basicui.vdf $C/basicui_gamepad.vdf $C/desktop_xboxone.vdf \
+  $C/templates/controller_xboxone_gamepad_joystick.vdf      # 4 4 1 1
+docker exec steam-headless stat -c '%s %n' $C/desktop_xboxone.vdf   # 7924
+docker exec steam-headless journalctl -u steam-headless-steam -n 300 | grep -c BVerifyInstalledFiles
+```
+
+Changing the timing: edit `long_press_time` in the `block_for()` helper of
+`rootfs/usr/local/bin/steam-controller-patch`, rebuild, and delete the four files
+(Steam re-extracts the stock ones) or run the patcher against a stock tree.
+
+Caveats: a Steam client update restores the stock files, and the patch is only
+re-applied at the next container start (`docker compose restart` is enough); if
+Steam's UI keeps a cached copy, restart `steam-headless-steam` after patching.
+
+## 10. Managed Sunshine config
 
 Seeded on first boot by `/usr/local/sh-init.d/10-seed-sunshine-config.sh` from
 `/usr/share/steam-headless-custom/`; existing files are never overwritten.
@@ -272,7 +323,7 @@ client inside the same session):
 }
 ```
 
-## 10. Apps and launchers in gaming mode
+## 11. Apps and launchers in gaming mode
 
 Only Steam and the processes it spawns inherit
 `/run/steam-headless/gamescope-environment`. Anything started by Sunshine or by
@@ -285,7 +336,7 @@ SHUI lands on KWin (invisible under the fullscreen gamescope), so:
 - adding a non-Steam shortcut needs desktop-mode Steam UI (gamepad UI has no such
   button) or a generated `shortcuts.vdf`.
 
-## 11. Daily operations
+## 12. Daily operations
 
 ```bash
 cd ~/steam-headless-bc250
@@ -300,7 +351,7 @@ docker exec steam-headless journalctl -u steam-headless-steam -n 50 --no-pager
 docker exec steam-headless journalctl -u steam-headless-sunshine -n 50 --no-pager
 ```
 
-## 12. Backup / restore
+## 13. Backup / restore
 
 ```bash
 cd ~/sh2
@@ -319,7 +370,7 @@ docker logs steam-headless 2>&1 | head -n 55
 
 Never delete `/var/lib/steam-headless/installation.json` or `/home/steamheadless`.
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|

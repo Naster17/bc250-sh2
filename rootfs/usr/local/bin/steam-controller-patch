@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Add "long press Select -> Quick Access Menu" to Steam's shipped controller configs.
+
+Steam's default layouts map the physical Back/Select button to START/SELECT with a
+plain Full_Press activator only. We insert one extra activator:
+
+    "Long_Press" { binding "controller_action system_key_1" ; long_press_time 1000 }
+
+`system_key_1` is Steam's Quick Access Menu action (the right-hand panel with
+Performance, Friends, notifications) - the same action the stock Xbox chord config
+binds to Guide+A in chord_xboxone.vdf.
+
+Why the size juggling: Steam verifies controller_base files against the depot
+manifest at startup ("BVerifyInstalledFiles: ... is N bytes, expected M") and a
+Steam client update re-extracts them. KeyValues ignores whitespace, so after
+inserting the activator we remove exactly as many leading indentation characters
+as we added, keeping each file byte-identical in length to the shipped one.
+
+Short presses are untouched: an extra activator does not change Full_Press.
+The script is idempotent (files already carrying system_key_1 are skipped) and is
+re-run from /usr/local/sh-init.d on every boot, so a Steam update that restores
+the stock files is repaired at the next container start.
+
+Usage: steam-controller-patch [--steam-home DIR] [--dry-run] [--verbose]
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+TARGETS = (
+    "basicui.vdf",
+    "basicui_gamepad.vdf",
+    "desktop_xboxone.vdf",
+    "templates/controller_xboxone_gamepad_joystick.vdf",
+)
+
+MARKER = "system_key_1"
+
+
+def block_for(newline: str) -> str:
+    lines = [
+        '\t\t\t\t\t"Long_Press"',
+        "\t\t\t\t\t{",
+        '\t\t\t\t\t\t"bindings"',
+        "\t\t\t\t\t\t{",
+        '\t\t\t\t\t\t\t"binding"\t\t"controller_action system_key_1"',
+        "\t\t\t\t\t\t}",
+        '\t\t\t\t\t\t"settings"',
+        "\t\t\t\t\t\t{",
+        '\t\t\t\t\t\t\t"long_press_time"\t\t"1000"',
+        "\t\t\t\t\t\t}",
+        "\t\t\t\t\t}",
+    ]
+    return newline.join(lines) + newline
+
+
+def strip_indentation(lines: list[str], budget: int) -> int:
+    """Remove `budget` leading whitespace characters, a few per line.
+
+    Only characters before the first non-whitespace character are touched, so a
+    quoted value can never be modified. Line endings are preserved.
+    """
+    remaining = budget
+    for index, line in enumerate(lines):
+        if remaining <= 0:
+            break
+        body = line.rstrip("\r\n")
+        stripped = body.lstrip(" \t")
+        indent = len(body) - len(stripped)
+        if indent <= 0:
+            continue
+        take = min(indent, remaining)
+        lines[index] = line[take:]
+        remaining -= take
+    return remaining
+
+
+def patch(path: Path, dry_run: bool, verbose: bool) -> tuple[int, str]:
+    raw = path.read_bytes()
+    original_size = len(raw)
+    text = raw.decode("utf-8", "surrogateescape")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+
+    out: list[str] = []
+    inserted = 0
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        if line.strip() != '"button_escape"':
+            i += 1
+            continue
+
+        j = i + 1
+        while j < len(lines) and lines[j].strip() != '"activators"':
+            if lines[j].strip() in ('"button_menu"', '"left_bumper"', '"right_bumper"'):
+                break
+            j += 1
+        if j >= len(lines) or lines[j].strip() != '"activators"':
+            i += 1
+            continue
+
+        out.append(lines[j])
+        j += 1
+        if j >= len(lines) or lines[j].strip() != "{":
+            i = j
+            continue
+        out.append(lines[j])
+        j += 1
+
+        if MARKER in "".join(lines[j : j + 40]):
+            i = j
+            continue
+
+        out.append(block_for(newline))
+        inserted += 1
+        i = j
+
+    if not inserted:
+        return 0, f"already patched ({original_size} bytes)"
+
+    patched = "".join(out)
+    delta = len(patched.encode("utf-8", "surrogateescape")) - original_size
+    if verbose:
+        print(f"  {path.name}: {inserted} inserts, delta {delta:+d} bytes")
+
+    if delta > 0:
+        balanced = patched.splitlines(keepends=True)
+        left = strip_indentation(balanced, delta)
+        patched = "".join(balanced)
+        if left:
+            return 0, f"cannot balance size, {left} bytes short of the original"
+
+    final_size = len(patched.encode("utf-8", "surrogateescape"))
+    if final_size != original_size:
+        return 0, f"refusing to write: size {final_size} != original {original_size}"
+
+    if not dry_run:
+        path.write_bytes(patched.encode("utf-8", "surrogateescape"))
+    return inserted, f"size kept at {final_size} bytes"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--steam-home", default="/home/steamheadless/.local/share/Steam")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    args = parser.parse_args()
+
+    base = Path(args.steam_home) / "controller_base"
+    if not base.is_dir():
+        print(f"no controller_base at {base}", file=sys.stderr)
+        return 1
+
+    total = 0
+    for rel in TARGETS:
+        target = base / rel
+        if not target.is_file():
+            print(f"skip {rel} (missing)")
+            continue
+        count, note = patch(target, args.dry_run, args.verbose)
+        total += count
+        print(f"{rel}: {count} inserts, {note}")
+
+    print(f"total inserts: {total}{' (dry run)' if args.dry_run else ''}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
