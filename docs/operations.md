@@ -369,6 +369,19 @@ clocks, power) is passed through untouched, so those keep tracking the hardware.
 The activity field is written as a plain percentage, not the driver's
 centipercent, because values ≤ 100 are exactly what MangoHud renders.
 
+Where the percentage comes from, in order:
+
+1. `average_gfx_activity` of the real table, rounded from centipercent. This is
+   the driver's own number and what amdgpu_top shows, so the overlay matches it.
+   `0xFFFF` means the SMU has no sample for that cycle.
+2. Only then, the per-client `drm-engine-gfx` counters from
+   `/proc/<pid>/fdinfo/<fd>` (`libamdgpu_top/src/stat/fdinfo/proc_info.rs` does
+   the same). They must be aggregated **by `drm-client-id`**, never per
+   descriptor: every fd of a client repeats the client's cumulative counter, and
+   summing per fd multiplies the load (29 descriptors vs 18 clients on this box
+   gave the `75-85%` readings). The baseline is re-taken whenever the fallback
+   resumes, so the first delta after a gap cannot spike.
+
 The host files must exist before the container starts:
 
 ```bash

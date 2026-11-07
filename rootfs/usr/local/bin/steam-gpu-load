@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
-"""Publish AMD GPU utilisation for Steam's performance overlay.
+"""Publish AMD GPU utilisation for the performance overlay.
 
-Steam's overlay collects GPU stats in `gameoverlayui.so` (`CGPUStatsReaderDrm`)
-and reads exactly one sysfs file for utilisation:
+The overlay in gaming mode is MangoHud (`mangoapp`, spawned by gamescope), and
+Steam's own overlay reads the same sysfs node. Both want a percentage that the
+BC-250 cannot provide directly:
 
-    /sys/class/drm/card0/device/gpu_busy_percent
+  * `/sys/class/drm/card0/device/gpu_busy_percent` — the amdgpu driver answers
+    this read with `EOPNOTSUPP` on GFX1013 (no per-ASIC switch exists);
+  * `/sys/class/drm/card0/device/gpu_metrics` — a 128-byte binary table whose
+    `average_gfx_activity` (offset 28, `format_revision=2`) is `0xFFFF` whenever
+    the SMU has no sample. MangoHud divides anything above 100 by 100
+    (centipercent heuristic), so a single `0xFFFF` renders as `655%`, and it
+    prefers this table over `gpu_busy_percent` on every poll.
 
-On the BC-250 (Cyan Skillfish APU, GFX1013) the amdgpu driver answers that read
-with `EOPNOTSUPP` ("Not supported"), so the overlay falls back to garbage and
-shows things like 655%. There is no per-ASIC switch to turn the counter on.
+This daemon keeps both files sane inside the container (bind-mounted shadows,
+see docker-compose.yml):
 
-amdgpu_top gets a correct number because it never asks the driver: it parses the
-per-client engine counters in `/proc/<pid>/fdinfo/<fd>`
+  * `gpu_metrics` is rewritten every cycle from the real table: temperatures,
+    clocks and power pass through untouched, only the activity field is
+    replaced. The percentage comes from the driver's own centipercent value when
+    it is valid — that is exactly what amdgpu_top displays — and from the
+    per-client `drm-engine-gfx` counters in `/proc/<pid>/fdinfo/<fd>` when the
+    SMU reports `0xFFFF`. Counters are de-duplicated by `drm-client-id`: every
+    descriptor of a client repeats the same cumulative value, and summing per fd
+    inflates the result several times over.
+  * `gpu_busy_percent` gets the same percentage as plain text for readers that
+    use it (Steam's overlay, MangoHud's sysfs fallback).
 
-    drm-engine-gfx:   123456789 ns
-
-and divides the delta between two samples by the sample interval
-(`libamdgpu_top/src/stat/fdinfo/proc_info.rs::diff_usage`). This daemon does the
-same, sums the delta across every DRM client in the container, and publishes the
-result into a bind-mounted file that shadows `gpu_busy_percent` inside the
-container (see the volume in docker-compose.yml). Steam then reads a normal
-integer percentage.
-
-The value is written in place at a fixed width so a concurrent reader never sees
-a truncated file.
+Values are written in place at a fixed width so a concurrent reader never sees a
+truncated file.
 """
 
 from __future__ import annotations
@@ -37,20 +42,37 @@ OUT = Path(os.environ.get("GPU_LOAD_FILE", "/run/gpu-metrics/gpu_busy_percent"))
 METRICS_REAL = Path(os.environ.get("GPU_METRICS_REAL", "/run/gpu-device/gpu_metrics"))
 METRICS_OUT = Path(os.environ.get("GPU_METRICS_FILE", "/run/gpu-metrics/gpu_metrics"))
 INTERVAL = float(os.environ.get("GPU_LOAD_INTERVAL", "0.5"))
-# Offset of `average_gfx_activity` in the 128-byte gpu_metrics v2.x table that
-# amdgpu exposes on this APU (header 4 + gfx/soc temp 4 + core temps 16 +
-# l3 temps 4). The SMU reports 0xFFFF ("invalid") there, and MangoHud divides
-# anything above 100 by 100, which is where 655% comes from.
+
+# `average_gfx_activity` in the 128-byte v2.x table: header 4 + gfx/soc
+# temperature 4 + core temperatures 16 + l3 temperatures 4.
 ACTIVITY_OFFSET = 28
+
 ENGINE = b"drm-engine-gfx:"
+CLIENT = b"drm-client-id:"
 WIDTH = 3  # "NN\n"
 
 
-def snapshot() -> dict[tuple[int, int], int]:
-    """Engine time (ns) per (pid, fd) for every amdgpu client in this namespace."""
-    usage: dict[tuple[int, int], int] = {}
-    proc = Path("/proc")
-    for entry in proc.iterdir():
+def driver_activity() -> int | None:
+    """GPU load in percent from the driver table, or None when invalid.
+
+    amdgpu reports centipercent (5470 == 54.70%) and 0xFFFF for "no sample".
+    """
+    try:
+        table = METRICS_REAL.read_bytes()
+    except OSError:
+        return None
+    if len(table) < ACTIVITY_OFFSET + 2:
+        return None
+    raw = table[ACTIVITY_OFFSET] | (table[ACTIVITY_OFFSET + 1] << 8)
+    if raw == 0xFFFF:
+        return None
+    return min(100, (raw + 50) // 100)
+
+
+def snapshot() -> dict[tuple, int]:
+    """Cumulative gfx engine time (ns) per DRM client in this namespace."""
+    usage: dict[tuple, int] = {}
+    for entry in Path("/proc").iterdir():
         if not entry.name.isdigit():
             continue
         pid = int(entry.name)
@@ -67,17 +89,23 @@ def snapshot() -> dict[tuple[int, int], int]:
                 continue
             if ENGINE not in data:
                 continue
+            client = None
+            engine = None
             for line in data.splitlines():
-                if not line.startswith(ENGINE):
-                    continue
-                value = line[len(ENGINE):].strip()
-                if value.endswith(b" ns"):
-                    value = value[:-3]
-                try:
-                    usage[(pid, int(fd))] = int(value)
-                except ValueError:
-                    pass
-                break
+                if client is None and line.startswith(CLIENT):
+                    client = line[len(CLIENT):].strip()
+                elif engine is None and line.startswith(ENGINE):
+                    value = line[len(ENGINE):].strip()
+                    if value.endswith(b" ns"):
+                        value = value[:-3]
+                    try:
+                        engine = int(value)
+                    except ValueError:
+                        engine = None
+            if engine is None:
+                continue
+            key = ("client", client) if client else ("fd", pid, int(fd))
+            usage[key] = engine
     return usage
 
 
@@ -90,12 +118,7 @@ def publish(percent: int) -> None:
 
 
 def publish_metrics(percent: int) -> None:
-    """Refresh the shadowed gpu_metrics table, patching the activity field.
-
-    The whole table is rewritten every cycle so temperature, clocks and power
-    keep tracking the hardware; only `average_gfx_activity` differs from what
-    the driver reports.
-    """
+    """Rewrite the shadowed table with the measured activity percentage."""
     try:
         table = bytearray(METRICS_REAL.read_bytes())
     except OSError:
@@ -120,24 +143,37 @@ def main() -> int:
 
     previous = snapshot()
     last = time.monotonic()
+    # True while the driver supplies the value, so the fdinfo baseline has to be
+    # re-taken before deltas can be trusted again.
+    stale = False
+
     while True:
         time.sleep(INTERVAL)
         now = time.monotonic()
-        current = snapshot()
         elapsed = now - last
         last = now
 
-        total = 0
-        for key, value in current.items():
-            before = previous.get(key)
-            if before is None or value < before:
-                continue
-            total += value - before
-        previous = current
+        percent = driver_activity()
+        if percent is None:
+            current = snapshot()
+            if stale:
+                previous = current
+                stale = False
+                percent = 0
+            else:
+                total = 0
+                for key, value in current.items():
+                    before = previous.get(key)
+                    if before is None or value < before:
+                        continue
+                    total += value - before
+                previous = current
+                percent = 0
+                if elapsed > 0:
+                    percent = min(100, int(total * 100 / (elapsed * 1_000_000_000)))
+        else:
+            stale = True
 
-        percent = 0
-        if elapsed > 0:
-            percent = min(100, int(total * 100 / (elapsed * 1_000_000_000)))
         try:
             publish(percent)
             publish_metrics(percent)

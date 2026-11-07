@@ -3,6 +3,25 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.3.2] - 2026-11-08
+
+GPU usage now moved, but read far too high: the overlay showed `75-85%` while
+amdgpu_top reported `20-25%`.
+
+### Fixed
+
+- **Per-descriptor double counting.** `drm-engine-gfx` is a cumulative per-client
+  counter, and every descriptor of a client repeats it (a process with four DRM
+  descriptors produced four identical entries). Summing per `(pid, fd)` inflated
+  the percentage roughly by the number of descriptors — measured 29 descriptors
+  against 18 real clients. Counters are now de-duplicated by `drm-client-id`, the
+  same key amdgpu_top aggregates by.
+- **Prefer the driver's own number.** `average_gfx_activity` is centipercent
+  (`5470` == `54.70%`), exactly what amdgpu_top displays. It is used whenever the
+  SMU reports a valid sample (`0xFFFF` means "no sample"); the fdinfo path is now
+  only a fallback, and it re-baselines before it is used again so the first
+  delta after a gap cannot spike.
+
 ## [1.3.1] - 2026-11-08
 
 GPU usage still read `655%` after 1.3.0. The 1.3.0 fix was correct but incomplete:
