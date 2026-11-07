@@ -3,6 +3,17 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.2] - 2026-11-08
+
+### Added
+
+- `make dirs` provisions every host path compose mounts — `data/home`, `games`,
+  `state`, `journal`, `metrics` — and seeds the two metric files
+  (`gpu_busy_percent`, `gpu_metrics`) that must exist as *files* before the
+  container starts. Without them Docker creates directories at those paths and
+  the bind mounts fail. `make up` now depends on it, so the documented path
+  cannot miss the step.
+
 ## [1.4.1] - 2026-11-08
 
 Cold boot left the container unstartable:

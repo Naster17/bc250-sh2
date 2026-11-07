@@ -5,7 +5,7 @@ IMAGE ?= steam-headless-bc250:2
 SH2_DIR ?= $(shell grep -m1 '^SH2_DIR=' .env 2>/dev/null | cut -d= -f2)
 
 .DEFAULT_GOAL := help
-.PHONY: help env up build down restart ps logs health verify shell mode-gaming mode-desktop \
+.PHONY: help env dirs up build down restart ps logs health verify shell mode-gaming mode-desktop \
         reset-sunshine reset-auth backup
 
 help: ## Show available targets
@@ -14,10 +14,26 @@ help: ## Show available targets
 env: ## Create .env from .env.example when missing
 	@[ -f .env ] || { cp .env.example .env; echo "created .env from .env.example"; }
 
+dirs: env ## Create host directories and the metric seed files compose mounts
+	@set -e; \
+	base="$${SH2_DIR:-$$(grep -m1 '^SH2_DIR=' .env 2>/dev/null | cut -d= -f2)}"; \
+	base="$${base:-/opt/steam-headless}"; \
+	mkdir -p "$$base/data/home" "$$base/games" "$$base/state" "$$base/journal" "$$base/metrics"; \
+	[ -f "$$base/metrics/gpu_busy_percent" ] || printf '00\n' > "$$base/metrics/gpu_busy_percent"; \
+	if [ ! -s "$$base/metrics/gpu_metrics" ]; then \
+		if [ -r /sys/class/drm/card0/device/gpu_metrics ]; then \
+			cp /sys/class/drm/card0/device/gpu_metrics "$$base/metrics/gpu_metrics"; \
+		else \
+			python3 -c "import struct,sys; sys.stdout.buffer.write(struct.pack('<HBB', 128, 2, 2) + b'\xff' * 124)" \
+				> "$$base/metrics/gpu_metrics"; \
+		fi; \
+	fi; \
+	echo "host paths ready under $$base"
+
 build: env ## Build the image from this repository
 	$(COMPOSE) build
 
-up: env ## Start, or apply compose changes to, the container
+up: dirs ## Start, or apply compose changes to, the container
 	$(COMPOSE) up -d
 
 down: ## Remove the container; home, state, journal and games stay on disk

@@ -52,7 +52,7 @@ git clone git@github.com:Naster17/steam-headless-bc250.git
 cd steam-headless-bc250
 
 cp .env.example .env          # set SH2_DIR / PUID / PGID / TZ
-mkdir -p "$(grep ^SH2_DIR .env | cut -d= -f2)"/{data/home,games,state,journal}
+make dirs                     # host dirs + metric seed files compose mounts
 
 docker compose up -d --build
 docker compose logs -f        # first boot prints the SHUI bootstrap password
