@@ -3,6 +3,19 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.2.3] - 2026-11-07
+
+Long press felt sluggish; the Quick Access Menu needed a full second.
+
+### Changed
+
+- `long_press_time` is now `500` ms (was `1000`). The value lives in the
+  `LONG_PRESS_MS` constant of `steam-controller-patch`, so changing it again is a
+  one-line edit plus rebuild.
+- Stale blocks are removed when their timing differs from `LONG_PRESS_MS`, and the
+  freed bytes are returned as trailing spaces, so files keep their exact depot
+  size and a second run still reports `nothing to do`.
+
 ## [1.2.2] - 2026-11-07
 
 The Quick Access Menu opened on **Start** instead of **Select**.

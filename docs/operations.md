@@ -246,7 +246,7 @@ Steam's shipped default layouts, with Valve's (inverted) input names:
 
 ```text
 "button_menu"  ->  game_action Default SELECT   # the physical Select/Back button
-  Long_Press (1000 ms) -> controller_action system_key_1   # Quick Access Menu
+  Long_Press (500 ms) -> controller_action system_key_1   # Quick Access Menu
 
 "button_escape" ->  game_action Default START   # the physical Start/Menu button
   (left alone)
@@ -304,9 +304,11 @@ If the pad is dead after an edit, check those log lines first, then restore the
 files to their depot size (Steam re-extracts them on its next client update) and
 restart `steam-headless-steam`.
 
-Changing the timing: edit `long_press_time` in the `block_for()` helper of
-`rootfs/usr/local/bin/steam-controller-patch`, rebuild, and delete the four files
-(Steam re-extracts the stock ones) or run the patcher against a stock tree.
+Changing the timing: edit `LONG_PRESS_MS` in
+`rootfs/usr/local/bin/steam-controller-patch` and rebuild. The patcher treats a
+block with a different timing as stale, removes it and re-inserts the new one,
+returning the freed bytes as trailing spaces so the depot size stays exact — no
+need to reset the files to stock first.
 
 Caveats: a Steam client update restores the stock files, and the patch is only
 re-applied at the next container start (`docker compose restart` is enough); if
