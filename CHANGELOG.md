@@ -3,6 +3,15 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.8] - 2026-11-08
+
+### Changed
+
+- `restart: "no"`: the container no longer comes back on its own. Start it with
+  `docker start steam-headless` or `make up`. The docker daemon is also removed
+  from the boot runlevel (host-side: `doas rc-update del docker default`), so a
+  boot leaves the GPU box idle.
+
 ## [1.4.7] - 2026-11-08
 
 ### Documented

@@ -438,6 +438,21 @@ Intermediate steps appear because the governor ramps in 200 MHz increments
 (`frequency-thresholds.adjust`, ramp-rates); the display lags at most one
 governor sample plus one publish cycle, so about 1 s.
 
+### Starting on demand
+
+The container has `restart: "no"` and the docker daemon is not enabled in a
+runlevel, so a host boot leaves the machine idle. Start it explicitly:
+
+```shell
+doas rc-service docker start          # only after a boot
+docker start steam-headless           # plain start, keeps the existing container
+# or, after changing compose/Dockerfile:
+cd ~/steam-headless-bc250 && docker compose up -d
+```
+
+`docker start` re-runs the container with its configured mounts, so the host's
+sysfs overlays are re-resolved and the GPU clock path stays correct.
+
 ### CPU clock
 
 Steam reads:

@@ -8,7 +8,10 @@ services:
     image: steam-headless-bc250:2
     container_name: steam-headless
     hostname: steam-headless
-    restart: unless-stopped
+    # Started on demand: `docker start steam-headless` (or `make up`). Nothing
+    # comes back on its own after a host boot, so the GPU box stays idle until
+    # it is wanted.
+    restart: "no"
     network_mode: host
 
     cap_add:
