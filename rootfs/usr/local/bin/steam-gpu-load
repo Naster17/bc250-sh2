@@ -57,8 +57,11 @@ ACTIVITY_OFFSET = 28
 AVG_GFXCLK_OFFSET = 64
 GFXCLK_OFFSET = 76
 # The BC-250 unlock corrupts both clock sources with values in the 2..100 MHz
-# range, so anything outside these bounds is treated as noise.
-CLOCK_MIN_MHZ = 100
+# range, and the raw attribute briefly reads 100 while the governor re-creates
+# its overlay on a power plan change. The governor itself never commands less
+# than 350 MHz, so a 200 MHz floor rejects the corruption without hiding a real
+# low-power state.
+CLOCK_MIN_MHZ = 200
 CLOCK_MAX_MHZ = 3000
 
 ENGINE = b"drm-engine-gfx:"

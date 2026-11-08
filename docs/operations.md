@@ -422,8 +422,10 @@ the attribute. Verified with a locked 350 MHz plan: the host attribute, the
 published file and the container's `freq1_input` all read `350000000`, and the
 overlay shows 350 MHz.
 
-The raw table remains the fallback when the governor is not running; values
-outside 100..3000 MHz are treated as corruption.
+The raw table remains the fallback when the governor is not running. Values
+below 200 MHz are treated as corruption: the unlock reports 2..100 MHz, and the
+attribute reads a bare `100` for a moment while the governor re-creates its
+overlay during a plan change, which is what made the overlay flash 100 MHz.
 
 ### CPU clock
 

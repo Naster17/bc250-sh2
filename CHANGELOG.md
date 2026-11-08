@@ -3,6 +3,18 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.6] - 2026-11-08
+
+### Fixed
+
+- The raw attribute reads a bare `100 MHz` for about a second while the governor
+  re-creates its overlay on a power plan change, so the overlay flashed `100`
+  between two real values. Values below 200 MHz are now rejected as corruption;
+  the governor never commands less than 350 MHz.
+
+Verified by switching plans live: 350 MHz, then 1000 MHz - the overlay followed
+both, and the published file tracked `350000000` -> `1000000000`.
+
 ## [1.4.5] - 2026-11-08
 
 GPU clock in the overlays showed `100 MHz` (or flickering `7 / 30 / 20 / 41`)
