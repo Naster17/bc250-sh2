@@ -427,6 +427,17 @@ below 200 MHz are treated as corruption: the unlock reports 2..100 MHz, and the
 attribute reads a bare `100` for a moment while the governor re-creates its
 overlay during a plan change, which is what made the overlay flash 100 MHz.
 
+The published clock is the live one, not the plan value. Sampled every 200 ms
+while `vkmark` loaded the GPU on the 1000 MHz plan:
+
+```text
+1000 1000 1200 1200 1200 1200 1200 1000 1000 1000 1200 1200 1400 1400 1400 1200 1000
+```
+
+Intermediate steps appear because the governor ramps in 200 MHz increments
+(`frequency-thresholds.adjust`, ramp-rates); the display lags at most one
+governor sample plus one publish cycle, so about 1 s.
+
 ### CPU clock
 
 Steam reads:

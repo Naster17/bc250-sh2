@@ -3,6 +3,15 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.7] - 2026-11-08
+
+### Documented
+
+- The published clock is the live SMU value, not the plan value. Sampled every
+  200 ms under `vkmark` on the 1000 MHz plan it walks `1000 -> 1200 -> 1400 ->
+  1200 -> 1000`; the 200 MHz granularity comes from the governor's ramp rate,
+  and the display lags at most one governor sample plus one publish cycle.
+
 ## [1.4.6] - 2026-11-08
 
 ### Fixed
