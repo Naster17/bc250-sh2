@@ -393,18 +393,37 @@ cp /sys/class/drm/card0/device/gpu_metrics \
 
 ### GPU clock
 
-Both overlays read the clock from the amdgpu hwmon attribute
-`/sys/class/drm/card0/device/hwmon/hwmon<N>/freq1_input`, and on this board that
-read is unreliable: 200 rapid reads returned anything from `2` to `100` MHz with
-`2000` only occasionally, which is exactly the flickering `7 / 30 / 20 / 41 MHz`
-in the overlay. `gpu_metrics.current_gfxclk` (offset 76) is correct at the same
-moment.
+The BC-250 8-core unlock corrupts the clock reporting of the driver: with a
+locked 350 MHz the raw `hwmon/hwmon<N>/freq1_input` reads `100 MHz` forever, and
+`gpu_metrics.current_gfxclk` carries the same nonsense, so the overlay showed
+`100 MHz` (or flickering `7 / 30 / 20 / 41`) while amdgpu_top reported the real
+value. The userspace SMU governor (`cyan-skillfish-governor-smu`, which also
+drives the power plans) reads the clock over SMU and republishes it as bind
+overlays on the host's `freq1_input`, `pp_dpm_sclk` and the clock fields of
+`gpu_metrics`. That is the number to trust.
 
-`steam-gpu-load` therefore bind-mounts its own file over `freq1_input` inside the
-container (namespace-local, idempotent, skipped when already mounted) and writes
-`current_gfxclk` from the driver table there every cycle, in Hz. Verified: ten
-consecutive reads return `2000000000` while the driver reports 2000 MHz, and the
-shadow survives container restarts because the service re-creates it.
+Two traps:
+
+- A bind of `/sys/class/drm/card0/device` into the container is a snapshot of
+  the host's mount tree. The governor re-creates its overlays every time it
+  restarts, which is exactly what a power-plan change does, so the container
+  kept reading the raw (corrupted) file after each switch.
+- `mangoapp` opens `freq1_input` once at startup and keeps the descriptor, so a
+  shadow mounted after the compositor started never reaches the overlay.
+
+`steam-gpu-load` therefore reads the governor's value through
+`/host-proc/1/root/sys/class/hwmon/*/freq1_input` (the host's PID 1 root, so the
+lookup always follows the host's current mounts), then republishes it at the
+paths the overlays read: its own file bind-mounted over `freq1_input` in Hz, and
+the `average_gfxclk_frequency`/`current_gfxclk` fields of the shadowed
+`gpu_metrics`. `systemd` starts the service before
+`steam-headless-gamescope.service` so the mount exists before `mangoapp` opens
+the attribute. Verified with a locked 350 MHz plan: the host attribute, the
+published file and the container's `freq1_input` all read `350000000`, and the
+overlay shows 350 MHz.
+
+The raw table remains the fallback when the governor is not running; values
+outside 100..3000 MHz are treated as corruption.
 
 ### CPU clock
 

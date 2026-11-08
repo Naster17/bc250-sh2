@@ -40,17 +40,26 @@ import time
 from pathlib import Path
 
 OUT = Path(os.environ.get("GPU_LOAD_FILE", "/run/gpu-metrics/gpu_busy_percent"))
-METRICS_REAL = Path(os.environ.get("GPU_METRICS_REAL", "/run/gpu-device/gpu_metrics"))
+METRICS_REAL = Path(os.environ.get("GPU_METRICS_REAL", "/run/gpu-live/gpu_metrics"))
 METRICS_OUT = Path(os.environ.get("GPU_METRICS_FILE", "/run/gpu-metrics/gpu_metrics"))
 FREQ_OUT = Path(os.environ.get("GPU_FREQ_FILE", "/run/gpu-metrics/freq1_input"))
+# The governor's patched hwmon attribute, read through the host's mount tree so
+# that overlays re-created by a governor restart are always the current ones.
+HOST_ROOT = Path(os.environ.get("GPU_HOST_ROOT", "/host-proc/1/root"))
+CLOCK_CACHE: Path | None = None
 HWMON_ROOT = Path("/sys/class/hwmon")
 INTERVAL = float(os.environ.get("GPU_LOAD_INTERVAL", "0.5"))
 
 # `average_gfx_activity` in the 128-byte v2.x table: header 4 + gfx/soc
 # temperature 4 + core temperatures 16 + l3 temperatures 4.
 ACTIVITY_OFFSET = 28
-# `current_gfxclk` in MHz, right after the six average clock fields.
+# `average_gfxclk_frequency` and `current_gfxclk` in MHz.
+AVG_GFXCLK_OFFSET = 64
 GFXCLK_OFFSET = 76
+# The BC-250 unlock corrupts both clock sources with values in the 2..100 MHz
+# range, so anything outside these bounds is treated as noise.
+CLOCK_MIN_MHZ = 100
+CLOCK_MAX_MHZ = 3000
 
 ENGINE = b"drm-engine-gfx:"
 CLIENT = b"drm-client-id:"
@@ -122,8 +131,55 @@ def publish(percent: int) -> None:
         handle.truncate(WIDTH)
 
 
+def drop_stale_shadows() -> None:
+    """Unmount tmpfs copies that sit on top of the live driver directory.
+
+    Earlier experiments bind-mounted patched copies over `/run/gpu-device/*` and
+    then unlinked the sources, which leaves the whole read path frozen at the
+    values from whenever that happened: the clock never moves, temperatures and
+    power repeat forever. The compose mount itself is sysfs, so only tmpfs
+    children are dropped.
+    """
+    prefixes = ("/run/gpu-live/", "/run/gpu-device/")
+    for line in Path("/proc/self/mountinfo").read_text().splitlines():
+        left, _, right = line.partition(" - ")
+        fields = left.split()
+        if len(fields) < 5:
+            continue
+        mountpoint = fields[4]
+        if not mountpoint.startswith(prefixes):
+            continue
+        if "tmpfs" not in right:
+            continue
+        result = subprocess.run(["umount", "-l", mountpoint], capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"cannot unmount {mountpoint}: {result.stderr.strip()}", file=sys.stderr, flush=True)
+
+
 def clock_mhz() -> int | None:
-    """Current GFX clock from the driver table (MHz)."""
+    """Real GFX clock in MHz, preferring the governor's SMU reading.
+
+    The BC-250 8-core unlock corrupts the clock reporting, so the userspace SMU
+    governor republishes the real value over the host's hwmon attribute - the
+    same number amdgpu_top shows. Reading it through HOST_ROOT follows the
+    governor's live overlays, including the ones it re-creates on restart. The
+    raw table is only a fallback for hosts without the governor.
+    """
+    global CLOCK_CACHE
+    hz = 0
+    for candidate in (CLOCK_CACHE, host_freq_path()):
+        if candidate is None:
+            continue
+        try:
+            hz = int(candidate.read_text().strip())
+        except (OSError, ValueError):
+            CLOCK_CACHE = None
+            continue
+        CLOCK_CACHE = candidate
+        break
+    mhz = round(hz / 1_000_000)
+    if CLOCK_MIN_MHZ <= mhz <= CLOCK_MAX_MHZ:
+        return mhz
     try:
         table = METRICS_REAL.read_bytes()
     except OSError:
@@ -131,7 +187,21 @@ def clock_mhz() -> int | None:
     if len(table) < GFXCLK_OFFSET + 2:
         return None
     value = table[GFXCLK_OFFSET] | (table[GFXCLK_OFFSET + 1] << 8)
-    return value or None
+    return value if CLOCK_MIN_MHZ <= value <= CLOCK_MAX_MHZ else None
+
+
+def host_freq_path() -> Path | None:
+    """`freq1_input` of the amdgpu hwmon as seen by the host."""
+    for entry in (HOST_ROOT / "sys/class/hwmon").glob("hwmon*"):
+        try:
+            if (entry / "name").read_text().strip() != "amdgpu":
+                continue
+        except OSError:
+            continue
+        candidate = entry / "freq1_input"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def amdgpu_hwmon_freq() -> Path | None:
@@ -178,16 +248,20 @@ def publish_freq(mhz: int) -> None:
         handle.truncate(len(payload))
 
 
-def publish_metrics(percent: int) -> None:
-    """Rewrite the shadowed table with the measured activity percentage."""
+def publish_metrics(percent: int, clock: int | None) -> None:
+    """Rewrite the shadowed table: measured activity plus the real clock."""
     try:
         table = bytearray(METRICS_REAL.read_bytes())
     except OSError:
         return
-    if len(table) < ACTIVITY_OFFSET + 2:
+    if len(table) < GFXCLK_OFFSET + 2:
         return
     table[ACTIVITY_OFFSET] = percent & 0xFF
     table[ACTIVITY_OFFSET + 1] = (percent >> 8) & 0xFF
+    if clock is not None:
+        value = clock.to_bytes(2, "little")
+        table[AVG_GFXCLK_OFFSET:AVG_GFXCLK_OFFSET + 2] = value
+        table[GFXCLK_OFFSET:GFXCLK_OFFSET + 2] = value
     if not METRICS_OUT.exists() or METRICS_OUT.stat().st_size != len(table):
         METRICS_OUT.write_bytes(bytes(table))
         return
@@ -197,15 +271,15 @@ def publish_metrics(percent: int) -> None:
 
 
 def main() -> int:
+    drop_stale_shadows()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     if not OUT.exists() or OUT.stat().st_size != WIDTH:
         OUT.write_bytes(b"00\n")
-    publish_metrics(0)
-
     freq_path = amdgpu_hwmon_freq()
+    clock = clock_mhz()
+    publish_metrics(0, clock)
     if freq_path is not None:
         shadow_freq(freq_path)
-        clock = clock_mhz()
         if clock:
             publish_freq(clock)
 
@@ -243,9 +317,11 @@ def main() -> int:
             stale = True
 
         try:
-            publish(percent)
-            publish_metrics(percent)
+            if freq_path is not None:
+                shadow_freq(freq_path)
             clock = clock_mhz()
+            publish(percent)
+            publish_metrics(percent, clock)
             if clock and freq_path is not None:
                 publish_freq(clock)
         except OSError as exc:

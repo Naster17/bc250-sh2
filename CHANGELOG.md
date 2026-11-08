@@ -3,6 +3,30 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.5] - 2026-11-08
+
+GPU clock in the overlays showed `100 MHz` (or flickering `7 / 30 / 20 / 41`)
+regardless of the power plan, while amdgpu_top reported the real clock.
+
+### Fixed
+
+- **The BC-250 8-core unlock corrupts the driver's clock reporting.** With a
+  locked 350 MHz the raw `hwmon/freq1_input` and `gpu_metrics.current_gfxclk`
+  both read `100`. The userspace SMU governor already republishes the real SMU
+  value over those files on the host; the container was not seeing it.
+- The container's bind of `/sys/class/drm/card0/device` is a snapshot of the
+  host's mount tree, and the governor re-creates its overlays on every restart
+  (every power plan change), so the container fell back to the corrupted file.
+  `steam-gpu-load` now reads the governor's value through
+  `/host-proc/1/root/sys/class/hwmon/*/freq1_input` and republishes it into
+  `freq1_input` (Hz) and the `gpu_metrics` clock fields.
+- `mangoapp` opens `freq1_input` once and keeps the descriptor, so
+  `steam-gpu-load` now starts before `steam-headless-gamescope.service`;
+  previously the overlay kept reading the raw attribute.
+
+Verified: with a locked 350 MHz plan the host attribute, the published file and
+the container attribute all read `350000000`, and the overlay shows 350 MHz.
+
 ## [1.4.4] - 2026-11-08
 
 GPU clock in the overlay flickered through nonsense (`7 / 30 / 20 / 41 MHz`) while

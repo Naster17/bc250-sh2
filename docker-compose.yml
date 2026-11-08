@@ -87,5 +87,15 @@ services:
       # this APU that field is 0xFFFF, which MangoHud divides by 100 and renders
       # as 655%. Shadow the table as well; steam-gpu-load rewrites it every
       # cycle with the measured activity.
-      - /sys/class/drm/card0/device:/run/gpu-device:ro
+      # Live, unshadowed view of the device directory. It must not sit under a
+      # path that anything else patches: the driver files are the source of the
+      # values republished below, so a stale copy here freezes every metric.
+      # The BC-250 8-core unlock corrupts the clock reporting, so the userspace
+      # SMU governor republishes the real value through bind overlays on the
+      # host's sysfs. A plain bind of the device directory is a snapshot: it
+      # does not follow overlays the governor re-creates when it restarts (every
+      # power plan change). Reading through the host's PID 1 root follows the
+      # host's live mount tree instead.
+      - /proc:/host-proc:ro
+      - /sys/class/drm/card0/device:/run/gpu-live:ro
       - ${SH2_DIR:-/opt/steam-headless}/metrics/gpu_metrics:/sys/class/drm/card0/device/gpu_metrics:ro

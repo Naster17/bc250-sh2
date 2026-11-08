@@ -5,7 +5,11 @@ Documentation=https://github.com/Naster17/steam-headless-bc250
 # overlay reads a file this service keeps up to date. Nothing here depends on
 # Steam; it only needs the bind-mounted metrics file from docker-compose.yml.
 After=local-fs.target
-Before=steam-headless-steam.service
+# The overlay (mangoapp) opens freq1_input once at startup and keeps the
+# descriptor, so the bind mount has to exist before the compositor spawns it.
+# Otherwise the overlay reads the raw attribute, which on this board returns
+# 2..100 MHz at random, and the clock line stays broken until it is restarted.
+Before=steam-headless-gamescope.service steam-headless-steam.service
 
 [Service]
 Type=simple
