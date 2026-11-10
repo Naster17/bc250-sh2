@@ -196,8 +196,16 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         let def = Self::default();
+        // `usdpl_back::api::dirs::home()` discovers the gamescope user through
+        // `who`, which is empty in this container.  Prefer the explicit HOME
+        // that main.py sets to the persistent Steam home.
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_dir())
+            .or_else(usdpl_back::api::dirs::home)
+            .unwrap_or(def.home);
         Self {
-            home: usdpl_back::api::dirs::home().unwrap_or(def.home),
+            home,
             dirty: true,
         }
     }
