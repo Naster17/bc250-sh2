@@ -54,8 +54,8 @@ mkdir -p ~/sh2/{data/home,games,state,journal}
 ```bash
 cd ~/steam-headless-bc250
 cp .env.example .env            # SH2_DIR=/home/nik/sh2, PUID/PGID=1000, TZ
-docker compose build            # ~40 s on top of the pulled base image
-docker compose up -d
+make build                      # :2 plus :1.4.13; ~40 s on the base image
+make up
 docker compose logs -f
 ```
 
@@ -75,7 +75,9 @@ Update the base image:
 
 ```bash
 docker pull josh5/steam-headless:2
-docker compose build --no-cache && docker compose up -d
+docker compose build --no-cache
+docker tag steam-headless-bc250:2 steam-headless-bc250:1.4.13
+make up
 ```
 
 

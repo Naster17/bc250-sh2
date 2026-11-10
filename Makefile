@@ -1,6 +1,8 @@
 SHELL := /bin/sh
 COMPOSE ?= docker compose
 CONTAINER ?= steam-headless
+IMAGE_VERSION ?= 1.4.13
+GIT_REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 SH2_DIR ?= $(shell grep -m1 '^SH2_DIR=' .env 2>/dev/null | cut -d= -f2)
 
 .DEFAULT_GOAL := help
@@ -16,8 +18,9 @@ env: ## Create .env from .env.example when missing
 dirs: env ## Create host directories and the metric seed files compose mounts
 	@SH2_DIR="$(SH2_DIR)" ./scripts/prepare-host.sh
 
-build: env ## Build the image from this repository
-	$(COMPOSE) build
+build: env ## Build the image and tag it with IMAGE_VERSION
+	IMAGE_VERSION="$(IMAGE_VERSION)" GIT_REVISION="$(GIT_REVISION)" $(COMPOSE) build
+	docker tag steam-headless-bc250:2 steam-headless-bc250:$(IMAGE_VERSION)
 
 up: dirs ## Start, or apply compose changes to, the container
 	$(COMPOSE) up -d

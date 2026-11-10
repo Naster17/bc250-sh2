@@ -18,6 +18,13 @@ readonly REQUEST_FILE="${REQUEST_DIR}/request"
 readonly ACK_FILE="${REQUEST_DIR}/ack"
 readonly STATE_FILE="${RUN_DIR}/dynamic-display"
 
+warn() {
+    printf 'steam-display-request: %s\n' "$*" >&2
+    if command -v logger >/dev/null 2>&1; then
+        logger -t steam-display-request "$*" 2>/dev/null || true
+    fi
+}
+
 enabled=true
 if [[ -r "${STATE_FILE}" ]]; then
     read -r enabled <"${STATE_FILE}" || enabled=true
@@ -33,19 +40,19 @@ refresh="${SUNSHINE_CLIENT_FPS:-}"
 if [[ ! "${width}" =~ ^[0-9]{3,4}$ ]] ||
     [[ ! "${height}" =~ ^[0-9]{3,4}$ ]] ||
     [[ ! "${refresh}" =~ ^[0-9]{1,3}([.][0-9]{1,3})?$ ]]; then
-    echo "steam-display-request: missing or invalid SUNSHINE_CLIENT_* (${width}x${height}@${refresh})" >&2
+    warn "missing or invalid SUNSHINE_CLIENT_* (${width}x${height}@${refresh})"
     exit 0
 fi
 
 if [[ ! -d "${REQUEST_DIR}" || ! -w "${REQUEST_DIR}" ]]; then
-    echo "steam-display-request: ${REQUEST_DIR} is not writable; is steam-display-syncd running?" >&2
+    warn "${REQUEST_DIR} is not writable; is steam-display-syncd running?"
     exit 0
 fi
 
 daemon_pid=""
 [[ -s "${REQUEST_DIR}/pid" ]] && read -r daemon_pid <"${REQUEST_DIR}/pid" || true
 if [[ -z "${daemon_pid}" || ! -d "/proc/${daemon_pid}" ]]; then
-    echo "steam-display-request: steam-display-syncd is not running" >&2
+    warn "steam-display-syncd is not running"
     exit 0
 fi
 
@@ -62,12 +69,16 @@ for _ in {1..600}; do
         ack_nonce="" status="" message=""
         read -r ack_nonce status message <"${ACK_FILE}" || true
         if [[ "${ack_nonce}" == "${nonce}" ]]; then
-            printf 'steam-display-request: %s %s\n' "${status}" "${message}"
+            if [[ "${status}" == "ok" ]]; then
+                printf 'steam-display-request: %s %s\n' "${status}" "${message}"
+            else
+                warn "${status} ${message}"
+            fi
             exit 0
         fi
     fi
     sleep 0.1
 done
 
-echo "steam-display-request: timed out waiting for ${width}x${height}@${refresh}" >&2
+warn "timed out waiting for ${width}x${height}@${refresh}"
 exit 0

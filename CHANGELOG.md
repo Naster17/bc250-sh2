@@ -3,6 +3,21 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.13] - 2026-11-10
+
+### Added
+
+- OCI labels (`title`, `version`, `revision`, `source`, `licenses`). `make build`
+  also tags the image as `steam-headless-bc250:1.4.13`, in addition to `:2`.
+
+### Changed
+
+- The Dockerfile installs the curated `rootfs/` with one `COPY` instead of one
+  layer per file; `py_compile` uses a temporary cache prefix.
+- Display requests are accepted only from the `steamheadless` group (directory
+  `root:steamheadless 0770`), helper failures are logged to the journal, and the
+  daemon unit enables `NoNewPrivileges`, `PrivateTmp` and `ProtectSystem=full`.
+
 ## [1.4.12] - 2026-11-10
 
 ### Documented

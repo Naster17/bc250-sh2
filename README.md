@@ -68,8 +68,8 @@ cd steam-headless-bc250
 
 cp .env.example .env          # set SH2_DIR / PUID / PGID / TZ
 make dirs                     # host dirs + metric seed files compose mounts
-
-docker compose up -d --build
+make build                    # :2 plus the :1.4.13 rollback tag
+make up                       # start the container
 docker compose logs -f        # first boot prints the SHUI bootstrap password
 ```
 
@@ -154,6 +154,9 @@ Notes:
   [docs/steam-shortcuts.md](docs/steam-shortcuts.md) for the binary
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
+- **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
+  adds `steam-headless-bc250:1.4.13` for rollback. The image carries OCI
+  `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
 - **Controller:** holding `Select` for 500 ms opens Steam's Quick Access Menu

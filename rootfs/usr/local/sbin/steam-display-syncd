@@ -33,6 +33,7 @@ ack() {
     local nonce="$1" status="$2"
     shift 2
     printf '%s %s %s\n' "${nonce}" "${status}" "$*" >"${ACK_FILE}.tmp"
+    chmod 0644 "${ACK_FILE}.tmp"
     mv -f "${ACK_FILE}.tmp" "${ACK_FILE}"
 }
 
@@ -166,11 +167,15 @@ process_request() {
 
 main() {
     install -d -m 0755 "${RUN_DIR}"
-    install -d -m 0777 "${REQUEST_DIR}"
+    local gid
+    gid="$(id -g steamheadless 2>/dev/null || stat -c '%g' /home/steamheadless 2>/dev/null || echo 1000)"
+    # Only root and the steamheadless group may submit display requests.
+    install -d -o root -g "${gid}" -m 0770 "${REQUEST_DIR}"
     # Requests are written with mv(1), so anything matching this pattern is an
     # orphan from a writer that died before the rename.
     rm -f "${REQUEST_DIR}"/request.* 2>/dev/null || true
     printf '%s\n' "$$" >"${PID_FILE}"
+    chmod 0644 "${PID_FILE}"
     trap 'rm -f "${PID_FILE}"' EXIT
 
     exec 9>"${LOCK_FILE}"
