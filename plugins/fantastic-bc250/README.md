@@ -32,8 +32,8 @@ older than 5 seconds, the host daemon returns to its own GPU-edge curve.
 The host CLI is authoritative: `doas fan 50` and `doas fan auto` write a
 sticky `/run/bc250-fan/cli` record that the daemon checks before the Decky
 heartbeat. The plugin detects that record, mirrors it into `control`, and
-disables its own output. Enabling the plugin again from the panel removes the
-CLI record and claims control back.
+disables its own output. Any later fan-control change in the panel removes the
+CLI record and claims control back, so the last writer wins.
 
 ## Files
 

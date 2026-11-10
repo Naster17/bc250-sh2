@@ -46,8 +46,9 @@ updated=1762770000
   first, so a live Decky heartbeat cannot erase `doas fan 100` or
   `doas fan auto`.
 - The plugin backend detects the CLI record, mirrors it into `control`, and
-  disables its output. Enabling the plugin again from the QAM removes the CLI
-  record and claims control back.
+  disables its output. Any subsequent fan-control change in the panel (manual
+  slider, temperature curve, curve point, interpolation) removes the CLI
+  record and claims control back, so the last writer wins.
 
 ## Default Decky plugin
 
@@ -116,7 +117,8 @@ doas fan 3 60          # J4003 channel, direct sysfs
 
 `fan 50` and `fan auto` no longer stop the daemon; they write the sticky CLI
 record and the shared control file. The plugin yields while the CLI record
-exists; to return to plugin control, enable it again from the QAM.
+exists; moving the panel slider or changing the curve claims control back
+automatically.
 
 ## Verification
 

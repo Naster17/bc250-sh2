@@ -181,7 +181,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.7.2` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.7.3` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
@@ -296,7 +296,8 @@ mounts `/run/bc250-fan` read-write and both the `doas fan` CLI and the
 - `source=decky` is a 5-second heartbeat;
 - stale/missing/`auto` records return to the host GPU-edge curve;
 - `doas fan 100` / `fan auto` outrank the plugin; the plugin backend yields and
-  disables itself, so re-enable it in the QAM for plugin control.
+  disables itself. Moving the panel slider or changing the curve then claims
+  control back, so the last writer wins.
 
 The container never writes sysfs. Full protocol, host install and
 troubleshooting: [docs/fan-control.md](docs/fan-control.md).

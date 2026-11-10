@@ -3,6 +3,7 @@ use crate::services::fantastic::*;
 use usdpl_back::nrpc::_helpers::futures::{StreamExt, FutureExt};
 
 use super::control::ControlRuntime;
+use super::datastructs::{Settings, State};
 
 pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 pub const NAME: &'static str = env!("CARGO_PKG_NAME");
@@ -26,6 +27,20 @@ impl FanService {
 fn once_true() -> impl std::iter::Iterator<Item = bool> {
     // iters over [true, false, false, ...]
     std::iter::once(true).chain(std::iter::repeat(false))
+}
+
+/// Any control mutation from the panel is a fresh claim: it removes the
+/// sticky host-CLI record and re-enables Decky output.  This makes the last
+/// writer win instead of requiring a separate "enable" click after `fan`.
+fn claim_for_ui(settings: &mut Settings, state: &mut State) {
+    if settings.enable && !crate::sys::cli_override_present() {
+        return;
+    }
+    if let Err(e) = crate::sys::claim_decky() {
+        log::error!("failed to claim Decky fan control: {}", e);
+    }
+    settings.enable = true;
+    state.dirty = true;
 }
 
 #[usdpl_back::nrpc::_helpers::async_trait::async_trait]
@@ -159,8 +174,9 @@ impl<'a> IFan<'a> for FanService {
             input: EnablementMessage,
         ) -> Result<EnablementMessage, Box<dyn std::error::Error + Send>>{
             let mut settings = self.ctrl.settings().write().await;
+            let mut state = self.ctrl.state().write().await;
+            claim_for_ui(&mut settings, &mut state);
             if settings.interpolate != input.is_enabled {
-                let mut state = self.ctrl.state().write().await;
                 settings.interpolate = input.is_enabled;
                 state.dirty = true;
             }
@@ -198,12 +214,13 @@ impl<'a> IFan<'a> for FanService {
             point: GraphPoint,
         ) -> Result<Empty, Box<dyn std::error::Error + Send>>{
             let mut settings = self.ctrl.settings().write().await;
+            let mut state = self.ctrl.state().write().await;
+            claim_for_ui(&mut settings, &mut state);
             settings.curve.push(super::datastructs::GraphPoint {
                 x: point.x,
                 y: point.y
             });
             settings.sort_curve();
-            let mut state = self.ctrl.state().write().await;
             state.dirty = true;
             log::debug!("add_curve_point(point: {:?}) success", point);
             Ok(Empty { ok: true })
@@ -213,11 +230,12 @@ impl<'a> IFan<'a> for FanService {
             input: IndexMessage,
         ) -> Result<Empty, Box<dyn std::error::Error + Send>>{
             let mut settings = self.ctrl.settings().write().await;
+            let mut state = self.ctrl.state().write().await;
+            claim_for_ui(&mut settings, &mut state);
             let i = input.index as usize;
             if settings.curve.len() > i {
                 settings.curve.swap_remove(i);
                 settings.sort_curve();
-                let mut state = self.ctrl.state().write().await;
                 state.dirty = true;
                 log::debug!("remove_curve_point(point: {}) success", input.index);
                 Ok(Empty { ok: true })

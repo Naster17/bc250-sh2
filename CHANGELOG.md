@@ -3,6 +3,20 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.7.3] - 2026-11-10
+
+### Fixed
+
+- **Last writer wins between the host CLI and the Decky panel.** Any fan-control
+  mutation from the panel (manual slider, temperature curve, curve point,
+  interpolation) now calls `claim_decky` automatically: it removes the sticky
+  `/run/bc250-fan/cli` record and re-enables the plugin in the same operation.
+  Previously the panel had to be switched back on first; a stale UI state could
+  also swallow the first slider movement after `doas fan`.
+- The backend only claims when the CLI record is present or the plugin is
+  disabled, so a normal multi-point curve edit still writes one claim, not one
+  per point.
+
 ## [1.7.2] - 2026-11-10
 
 ### Fixed
@@ -271,9 +285,12 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   `-Djava.io.tmpdir=/home/steamheadless/.cache/prism-tmp` in the JVM arguments
   of each instance; the game then reaches `Setting user` and `Backend library:
   LWJGL version 3.3.3+5`.
-- The live `1.21.1` instance now uses MidnightControls `1.10.0.1`; Controlify
-  and YACL were removed during diagnosis. Both the live instance and the
-  vanilla `1.21.1(1)` instance carry the JVM tmpdir fix.
+- The live `1.21.1` instance now uses Controlify `3.0.1+lts` + YACL `3.8.2`;
+  the Controlify jar has the incompatible `AbstractRecipeBookScreenMixin`
+  entry removed from `controlify.mixins.json`. MidnightControls is the
+  alternative. Resolution follows the system: `fullscreen:true`,
+  `overrideWidth:0`, `overrideHeight:0`, `guiScale:0`; the Prism window is
+  `1920x1080` for the `1920x1080` gamescope output.
 
 ## [1.4.8] - 2026-11-08
 

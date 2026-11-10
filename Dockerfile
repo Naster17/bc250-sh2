@@ -49,7 +49,7 @@ RUN set -eux; \
 COPY rootfs/ /
 COPY plugins/ /opt/decky-loader/plugins/
 
-ARG IMAGE_VERSION=1.7.2
+ARG IMAGE_VERSION=1.7.3
 ARG GIT_REVISION=unknown
 
 LABEL org.opencontainers.image.title="Steam Headless BC-250" \

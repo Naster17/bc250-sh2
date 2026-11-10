@@ -1,7 +1,7 @@
 {
     "name": "Fantastic BC250",
     "author": "Steam Headless BC-250 (fork of NGnius/Fantastic)",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "flags": [
         "root",
         "global-dfl"
