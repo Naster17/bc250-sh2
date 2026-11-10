@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 COMPOSE ?= docker compose
 CONTAINER ?= steam-headless
-IMAGE_VERSION ?= 1.6.0
+IMAGE_VERSION ?= 1.7.0
 GIT_REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DEPLOY_HOST ?= $(shell grep -m1 '^DEPLOY_HOST=' .env 2>/dev/null | cut -d= -f2)
 DEPLOY_DIR ?= $(shell grep -m1 '^DEPLOY_DIR=' .env 2>/dev/null | cut -d= -f2)
@@ -9,14 +9,20 @@ DEPLOY_DIR := $(if $(DEPLOY_DIR),$(DEPLOY_DIR),~/steam-headless-bc250)
 SH2_DIR ?= $(shell grep -m1 '^SH2_DIR=' .env 2>/dev/null | cut -d= -f2)
 
 .DEFAULT_GOAL := help
-.PHONY: help env dirs up build deploy down restart ps logs health verify shell mode-gaming mode-desktop \
-        reset-sunshine reset-auth backup
+.PHONY: help env host-fan bootstrap dirs up build deploy down restart ps logs health verify shell \
+        mode-gaming mode-desktop reset-sunshine reset-auth backup
 
 help: ## Show available targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z-]+:.*## /{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-env: ## Create .env from .env.example when missing
-	@[ -f .env ] || { cp .env.example .env; echo "created .env from .env.example"; }
+env: ## Create a host-specific .env when missing
+	@./scripts/init-env.sh
+
+host-fan: ## Install or verify the host bc250-fan-curve daemon
+	@./scripts/install-fan-daemon.sh
+
+bootstrap: ## One-command install: env, host fan, dirs, build and up
+	@./scripts/bootstrap-host.sh
 
 dirs: env ## Create host directories and the metric seed files compose mounts
 	@SH2_DIR="$(SH2_DIR)" ./scripts/prepare-host.sh
@@ -29,7 +35,7 @@ deploy: ## Push HEAD and rebuild on the host (DEPLOY_HOST/DEPLOY_DIR)
 	@test -n "$(DEPLOY_HOST)" || { echo "set DEPLOY_HOST in .env or pass DEPLOY_HOST=user@host"; exit 1; }
 	@test -z "$$(git status --porcelain)" || { echo "commit or stash changes before deploy"; exit 1; }
 	git push origin HEAD
-	ssh "$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && git pull --ff-only && make build && make up"
+	ssh "$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && git pull --ff-only && make bootstrap"
 
 up: dirs ## Start, or apply compose changes to, the container
 	$(COMPOSE) up -d

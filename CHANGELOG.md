@@ -3,6 +3,36 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.7.0] - 2026-11-10
+
+### Added
+
+- **One-command bootstrap:** `make bootstrap` creates a host-specific `.env`,
+  loads the required input/fuse modules, installs the pinned
+  `bc250fc` v0.2.0 host fan arbiter when missing, prepares the data root,
+  builds the image, starts the container and waits for the healthcheck.
+  `make host-fan` installs or verifies only the host daemon.
+- **Fantastic BC250 fan-speed slider:** the Quick Access Menu panel has a
+  QAM-style 0–100% slider. Moving it enables the plugin and writes a flat
+  target; the temperature graph remains editable below it.
+
+### Changed
+
+- Image version is `1.7.0`.
+- Decky's `PluginLoader` download now uses IPv4, has a bounded timeout, and
+  accepts `DECKY_LOADER_URL` for a local mirror; the SHA-256 pin is unchanged.
+- `make deploy` now runs the host bootstrap on the remote checkout.
+
+### Fixed
+
+- Fantastic BC250 resolved its settings from `/home/deck` because
+  `usdpl_back::api::dirs::home()` looks up the gamescope user through `who`,
+  which is empty in this container. The backend now prefers `$HOME` (set by
+  `main.py` to `/home/steamheadless`), so the Quick Access Menu toggle
+  persists and the manual heartbeat is written.
+- A fresh clone no longer needs hand-edited `SH2_DIR`, `PUID`, `PGID` or `TZ`;
+  the bootstrap chooses a user-writable data root and the current host identity.
+
 ## [1.6.0] - 2026-11-10
 
 ### Added
@@ -12,9 +42,6 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   reads GPU-edge temperature and CPU_FAN1 RPM and sends a 0–255 PWM heartbeat
   to the host fan arbiter. Baked under `/opt/decky-loader/plugins` and seeded
   into `~/homebrew/plugins` on first boot; disabled by default.
-- Fantastic BC250 includes a Quick Access Menu fan-speed slider. Moving it
-  enables the plugin and writes a flat 0–100% target; the temperature curve is
-  still editable from the graph.
 - Host `/run/bc250-fan` bind mount and the `source=decky` heartbeat contract.
 - `docs/fan-control.md`, README fan section, health checks for the seeded
   plugin and host `bc250-fan-curve` daemon.
@@ -24,16 +51,6 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 - Image version is `1.6.0`.
 - `bc250-fan-curve` in the host `bc250fc` repo is now the single writer of
   CPU_FAN1; the CLI and Decky plugin no longer stop or race the daemon.
-- Decky's `PluginLoader` download now uses IPv4, has a bounded timeout, and
-  accepts `DECKY_LOADER_URL` for a local mirror; the SHA-256 pin is unchanged.
-
-### Fixed
-
-- Fantastic BC250 resolved its settings from `/home/deck` because
-  `usdpl_back::api::dirs::home()` looks up the gamescope user through `who`,
-  which is empty in this container. The backend now prefers `$HOME` (set by
-  `main.py` to `/home/steamheadless`), so the Quick Access Menu toggle
-  persists and the manual heartbeat is written.
 
 ## [1.5.0] - 2026-11-10
 

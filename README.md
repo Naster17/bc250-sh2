@@ -64,27 +64,35 @@ Runtime knobs live in `docker-compose.yml`:
 - Linux host, cgroup v2, Docker ≥ 24 with compose v2
 - `/dev/dri/renderD128`, `/dev/uinput`, `/dev/uhid`, `/dev/fuse`
 - host networking (Moonlight discovery + WebRTC need it)
+- the BC-250 `nct6687` fan driver and a host fan daemon; `make bootstrap`
+  installs the pinned [`bc250fc`](https://github.com/Naster17/bc250fc) stack
+  with `doas`/`sudo` when it is missing
 
 ## Quick start
 
 ```bash
-git clone git@github.com:Naster17/steam-headless-bc250.git
+git clone https://github.com/Naster17/steam-headless-bc250.git
 cd steam-headless-bc250
-
-cp .env.example .env          # set SH2_DIR / PUID / PGID / TZ
-make dirs                     # host dirs + metric seed files compose mounts
-make build                    # :2 plus the :1.6.0 rollback tag
-make up                       # start the container
-docker compose logs -f        # first boot prints the SHUI bootstrap password
+make bootstrap
 ```
 
+`make bootstrap` is the supported fresh-host path. It creates a user-writable
+`.env` (`$HOME/steam-headless`, current UID/GID and timezone), loads the input
+modules, installs the pinned host fan daemon if needed, builds the image,
+starts the container and waits for the healthcheck. It asks for `doas`/`sudo`
+only for host modules and the fan service. If Docker itself is not installed,
+install Docker ≥ 24 and the compose v2 plugin first.
+
 Open `https://<host>:8483`, sign in as `steamheadless` with the temporary
-password, set the permanent one, then connect a Moonlight client and pick a tile.
+password from `docker compose logs` (first boot), set the permanent one, then
+connect a Moonlight client and pick a tile.
+
+For an existing checkout, `make up` creates the `.env` and host directories if
+they are missing; `make host-fan` installs only the host fan arbiter.
 
 ### Deploy from a workstation
 
-`make deploy` pushes the current HEAD and runs `git pull --ff-only && make build
-&& make up` on the host. Set `DEPLOY_HOST` and `DEPLOY_DIR` in `.env`, or pass
+`make deploy` pushes the current HEAD and runs `git pull --ff-only && make bootstrap` on the host. Set `DEPLOY_HOST` and `DEPLOY_DIR` in `.env`, or pass
 them on the command line:
 
 ```bash
@@ -173,7 +181,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.6.0` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.7.0` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
@@ -278,7 +286,7 @@ host curve if the plugin or container stops. See
 ## Fan control
 
 The host [`bc250fc`](https://github.com/Naster17/bc250fc) `bc250-fan-curve`
-daemon is the only writer of CPU_FAN1 (`nct6686/pwm2`). The container bind
+daemon (installed by `make bootstrap`/`make host-fan`) is the only writer of CPU_FAN1 (`nct6686/pwm2`). The container bind
 mounts `/run/bc250-fan` read-write and both the `doas fan` CLI and the
 **Fantastic BC250** Decky plugin send requests through
 `/run/bc250-fan/control`:

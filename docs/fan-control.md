@@ -58,13 +58,25 @@ new plugin version replaces the plugin directory on boot, while
 
 ## Host setup
 
-On the host (Alpine/OpenRC here):
+The supported path is the repository bootstrap, which installs the pinned
+`bc250fc` v0.2.0 stack when it is missing:
 
 ```sh
-git clone https://github.com/Naster17/bc250fc.git
+make host-fan       # install/verify only the host fan daemon
+make bootstrap      # fresh host: env, fan daemon, dirs, image, container
+```
+
+`make bootstrap` runs the installer through `doas`/`sudo` and preserves an
+existing `bc250fc` installation. The installer builds/loads `nct6687` when the
+running kernel does not ship it, installs the `fan` CLI and starts the OpenRC
+or systemd service.
+
+Manual equivalent:
+
+```sh
+git clone --branch v0.2.0 https://github.com/Naster17/bc250fc.git
 cd bc250fc
 doas sh install.sh
-doas rc-service bc250-fan-curve restart
 ```
 
 The unit creates `/run/bc250-fan`. Compose bind-mounts it read-write:

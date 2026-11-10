@@ -51,14 +51,17 @@ mkdir -p "${SH2_DIR:-/opt/steam-headless}"/{data/home,games,state,journal}
 
 ```bash
 cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
-cp .env.example .env            # set SH2_DIR, PUID, PGID, TZ
-make build                      # :2 plus :1.6.0; ~1 min with Decky download
-make up
+make bootstrap                  # .env, host fan, dirs, build, up, health
 docker compose logs -f
 ```
 
+`make bootstrap` is the fresh-host path. It installs the pinned `bc250fc`
+host fan daemon with `doas`/`sudo` if it is missing, creates a user-writable
+`SH2_DIR` and the host directories, builds the image, starts the container and
+waits for the healthcheck. Existing `.env` values are preserved.
+
 From a workstation with push access, `make deploy` pushes HEAD and runs
-`git pull --ff-only && make build && make up` on the host. Set `DEPLOY_HOST` and
+`git pull --ff-only && make bootstrap` on the host. Set `DEPLOY_HOST` and
 `DEPLOY_DIR` in `.env`, or pass them to make. The working tree must be clean and
 the host checkout must be on the same branch.
 
@@ -80,7 +83,7 @@ Update the base image:
 ```bash
 docker pull josh5/steam-headless:2
 docker compose build --no-cache
-docker tag steam-headless-bc250:2 steam-headless-bc250:1.6.0
+docker tag steam-headless-bc250:2 steam-headless-bc250:1.7.0
 make up
 ```
 
