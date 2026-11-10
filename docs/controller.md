@@ -28,7 +28,7 @@ was and re-inserted, keeping the byte size identical).
 
 | File in the image | Role |
 |---|---|
-| `/usr/local/bin/steam-controller-patch` | inserts the activator into `basicui.vdf`, `basicui_gamepad.vdf`, `desktop_xboxone.vdf` and `templates/controller_xboxone_gamepad_joystick.vdf` (Big Picture, Desktop and default per-game layouts) |
+| `/usr/local/bin/steam-controller-patch` | inserts the activator into `basicui.vdf`, `basicui_gamepad.vdf`, `desktop_xboxone.vdf`, `templates/controller_xboxone_gamepad_joystick.vdf` and `templates/controller_xbox360_gamepad_joystick.vdf` (Big Picture, Desktop and default per-game layouts) |
 | `/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | re-runs it on every container start |
 
 Two constraints shaped the implementation:

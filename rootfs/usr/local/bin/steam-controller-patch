@@ -57,6 +57,7 @@ TARGETS = (
     "basicui_gamepad.vdf",
     "desktop_xboxone.vdf",
     "templates/controller_xboxone_gamepad_joystick.vdf",
+    "templates/controller_xbox360_gamepad_joystick.vdf",
 )
 
 MARKER = "system_key_1"
@@ -70,6 +71,8 @@ class KVError(Exception):
 
 def tokenize(text: str):
     i, n = 0, len(text)
+    if text.startswith("\ufeff"):
+        i = 1
     while i < n:
         c = text[i]
         if c in " \t\r\n":

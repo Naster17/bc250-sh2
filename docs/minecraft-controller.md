@@ -186,6 +186,7 @@ There is no Controlify or MidnightControls **NeoForge** build for 1.20.1; use
 | Controlify not listed in game | jar in the wrong instance/mod loader, or Minecraft version mismatch |
 | Game crashes at startup | missing YACL, wrong NeoForge/Minecraft build, or duplicate controller mods |
 | Controller visible in Steam UI but not in game | Prism shortcut layout is keyboard/mouse; set it to Gamepad |
+| Mixin error: `remappable @Shadow` on Controlify `AbstractRecipeBookScreenMixin` | Controlify `3.0.1+lts` vs NeoForge 21.1.265's Mixin 0.8.7; the live jar has that one mixin entry removed |
 | Select opens Steam QAM instead of the mod menu | `steam-controller-patch` long-press interception; use a different Controlify button |
 | Mouse works but controller does not | Steam Input is hiding the pad; use a Gamepad layout or disable Steam Input for the shortcut |
 | Controlify menu opens but no input | controller detection issue; re-check the layout and the virtual pad |
