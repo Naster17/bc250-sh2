@@ -312,6 +312,7 @@ rootfs/
     steam-display-syncd.service
     decky-loader-seed.service
     plugin_loader.service
+    plugin_loader.service.d/10-tmpdir.conf
   opt/decky-loader/LICENSE         # PluginLoader is downloaded at build time
   usr/local/bin/
     decky-loader-seed

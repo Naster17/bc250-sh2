@@ -68,6 +68,7 @@ RUN set -eux; \
                /etc/systemd/system/steam-display-syncd.service \
                /etc/systemd/system/decky-loader-seed.service \
                /etc/systemd/system/plugin_loader.service \
+               /etc/systemd/system/plugin_loader.service.d/10-tmpdir.conf \
                /opt/decky-loader/LICENSE \
                /usr/share/steam-headless-custom/sunshine.conf \
                /usr/share/steam-headless-custom/apps.json; \

@@ -19,6 +19,14 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   troubleshooting. README and operations/troubleshooting pages link to it.
 - `decky-loader.version` OCI label and Decky units in `scripts/health.sh`.
 
+### Fixed
+
+- `plugin_loader` crashed in a restart loop with
+  `libz.so.1: failed to map segment from shared object`: `/tmp` and `/run` are
+  `noexec`, while PyInstaller extracts its shared objects to `TMPDIR`. A
+  `plugin_loader.service.d` drop-in now points `TMPDIR` at
+  `~/homebrew/tmp`; the drop-in survives Decky's own service-file updates.
+
 ### Changed
 
 - Image version is `1.5.0`.

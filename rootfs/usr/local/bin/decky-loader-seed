@@ -33,7 +33,7 @@ gid="$(stat -c '%g' "${home}")"
 
 install -d -o "${uid}" -g "${gid}" -m 0755 \
     "${brew}" "${brew}/plugins" "${brew}/settings" "${brew}/data" \
-    "${brew}/logs" "${services}"
+    "${brew}/logs" "${brew}/services" "${brew}/tmp"
 
 if [[ ! -x "${target}" ]]; then
     install -o "${uid}" -g "${gid}" -m 0755 "${source}" "${target}"

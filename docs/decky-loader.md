@@ -21,7 +21,10 @@ release so a fresh container does not download it at boot.
    writes `~/homebrew/services/.loader.version`, and creates Steam's
    `.cef-enable-remote-debugging` marker with the `steamheadless` owner.
 2. `plugin_loader.service` starts as root, binds `127.0.0.1:1337`, and waits for
-   Steam's CEF debug endpoint on `127.0.0.1:8080`.
+   Steam's CEF debug endpoint on `127.0.0.1:8080`. A drop-in sets
+   `TMPDIR=~/homebrew/tmp`: `/tmp` and `/run` are mounted `noexec`, and
+   PyInstaller must extract its shared objects somewhere executable. The
+   drop-in survives Decky's self-updater replacing the main service file.
 3. Steam starts gamepad UI with the CEF marker present. Decky injects its
    frontend into the Quick Access Menu.
 
