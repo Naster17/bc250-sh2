@@ -39,7 +39,7 @@ flowchart LR
 | `rootfs/usr/local/sh-init.d/10-seed-sunshine-config.sh` | On boot, seeds `~/.config/sunshine/{sunshine.conf,apps.json}` from the defaults below, only if absent. |
 | `rootfs/usr/share/steam-headless-custom/sunshine.conf` | `encoder = software`, `capture = kwin`, `upnp = disabled`, plus the managed `global_prep_cmd` that applies each Moonlight client's requested display mode. |
 | `rootfs/usr/share/steam-headless-custom/apps.json` | Two stream-only tiles: `Desktop` and `Steam \| Game Mode` (no `cmd`, so nothing spawns a second Steam). |
-| `rootfs/usr/local/bin/steam-display-request` + `rootfs/usr/local/sbin/steam-display-syncd` + `rootfs/etc/systemd/system/steam-display-syncd.service` | **Dynamic per-client display mode.** Sunshine runs the unprivileged request helper at stream start; the root daemon applies `SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS` to the KWin virtual output and, in gaming mode, relaunches gamescope and Steam with the same output size and refresh. Moonlight's 720p60, 1080p90 or 1280x800 request therefore changes what the game actually renders, not just what Sunshine scales. |
+| `rootfs/usr/local/bin/steam-display-request` + `rootfs/usr/local/bin/steam-display-syncd` + `rootfs/etc/systemd/system/steam-display-syncd.service` | **Dynamic per-client display mode.** Sunshine runs the unprivileged request helper at stream start; the root daemon applies `SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS` to the KWin virtual output and, in gaming mode, relaunches gamescope and Steam with the same output size and refresh. Moonlight's 720p60, 1080p90 or 1280x800 request therefore changes what the game actually renders, not just what Sunshine scales. |
 | `rootfs/usr/local/bin/steam-controller-patch` + `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | Adds a **500 ms long-press on Select → Quick Access Menu** (`controller_action system_key_1`, the right-hand panel with Performance/Friends) to the default Big Picture, Desktop and per-game Xbox layouts. Useful when the controller's Guide button is unreliable, since Steam's own chords all require Guide. Every patched file keeps its exact original byte size — Steam verifies `controller_base` against its depot manifest and re-extracts mismatching files. Re-applied on every boot, because a Steam client update restores the stock files. |
 | `rootfs/usr/local/bin/steam-gpu-load` + `rootfs/etc/systemd/system/steam-gpu-load.service` | Publishes GPU utilisation. The BC-250 driver answers `gpu_busy_percent` with `EOPNOTSUPP`, and the `gpu_metrics` table reports `0xFFFF` for `average_gfx_activity`, which MangoHud divides by 100 and renders as `655%`. The daemon rewrites both nodes inside the container from the driver's own centipercent value, falling back to per-`drm-client-id` `drm-engine-gfx` deltas. |
 | `rootfs/usr/local/bin/steam-cpu-freq` + `rootfs/etc/systemd/system/steam-cpu-freq.service` | Publishes the CPU clock. The BC-250 kernel registers no cpufreq driver, so `cpu*/cpufreq/scaling_cur_freq` does not exist and the overlay shows a constant. The service shadows each `cpuN` directory with a view that adds those files, fed from `/proc/cpuinfo`. |
@@ -296,8 +296,8 @@ rootfs/
     steam-controller-patch
     steam-cpu-freq
     steam-display-request
+    steam-display-syncd
     steam-gpu-load
-  usr/local/sbin/steam-display-syncd
   usr/local/sh-init.d/{10-seed-sunshine-config.sh,20-patch-steam-controller-base.sh,30-manage-sunshine-display-prep.sh}
   usr/share/steam-headless-custom/{sunshine.conf,apps.json}
 ```

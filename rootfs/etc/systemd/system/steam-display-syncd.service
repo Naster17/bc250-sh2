@@ -6,7 +6,7 @@ Before=steam-headless-sunshine.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/steam-display-syncd
+ExecStart=/usr/local/bin/steam-display-syncd
 Restart=always
 RestartSec=2
 NoNewPrivileges=true

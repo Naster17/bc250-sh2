@@ -13,6 +13,12 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 - `docs/site.md`: this deployment's host, paths, portal URL, timezone and
   SteamID.
 
+### Fixed
+
+- The one-COPY install tripped over the base image's `/usr/local/sbin -> bin`
+  symlink; the display daemon now lives in `/usr/local/bin` and the unit points
+  there.
+
 ### Changed
 
 - `.env.example` now uses generic `SH2_DIR=/opt/steam-headless` and `TZ=UTC`;

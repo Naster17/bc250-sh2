@@ -41,7 +41,7 @@ RUN set -eux; \
                /usr/local/bin/steam-gpu-load \
                /usr/local/bin/steam-cpu-freq \
                /usr/local/bin/steam-display-request \
-               /usr/local/sbin/steam-display-syncd \
+               /usr/local/bin/steam-display-syncd \
                /usr/local/sh-init.d/10-seed-sunshine-config.sh \
                /usr/local/sh-init.d/20-patch-steam-controller-base.sh \
                /usr/local/sh-init.d/30-manage-sunshine-display-prep.sh; \
@@ -52,7 +52,7 @@ RUN set -eux; \
     bash -n /usr/local/bin/gamescope-no-force-grab; \
     bash -n /usr/local/bin/steam-cpu-freq; \
     bash -n /usr/local/bin/steam-display-request; \
-    bash -n /usr/local/sbin/steam-display-syncd; \
+    bash -n /usr/local/bin/steam-display-syncd; \
     bash -n /usr/local/sh-init.d/10-seed-sunshine-config.sh; \
     bash -n /usr/local/sh-init.d/20-patch-steam-controller-base.sh; \
     bash -n /usr/local/sh-init.d/30-manage-sunshine-display-prep.sh; \
