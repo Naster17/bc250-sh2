@@ -25,9 +25,17 @@ class Plugin:
     # Asyncio-compatible long-running code, executed in a task when the plugin is loaded
     async def _main(self):
         # startup
+        env = dict(os.environ)
+        # Decky runs this entry point as root.  Keep Fantastic settings in the
+        # persistent Steam home instead of /root, which is recreated with the
+        # container filesystem.
+        steam_home = "/home/steamheadless"
+        if os.path.isdir(steam_home):
+            env["HOME"] = steam_home
+            env["XDG_CONFIG_HOME"] = os.path.join(steam_home, ".config")
         self.backend_proc = subprocess.Popen(
             [PARENT_DIR + "/bin/backend"],
-            env = dict(os.environ))
+            env=env)
         while True:
             await asyncio.sleep(1)
 
