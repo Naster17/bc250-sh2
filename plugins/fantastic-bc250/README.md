@@ -61,6 +61,10 @@ into `~/homebrew/plugins/fantastic-bc250` on first boot. It is installed by
 default but disabled: the host curve remains authoritative until the user
 enables the custom fan curve in the Decky Quick Access Menu.
 
+The backend resolves `~/.config/fantastic/fantastic.json` from `$HOME`, which
+`main.py` sets to `/home/steamheadless`; `usdpl_back::api::dirs::home()` is not
+usable here because its `who` lookup is empty in the container.
+
 ## License
 
 GPL-3.0-only, inherited from Fantastic. See `LICENSE` and the upstream project.

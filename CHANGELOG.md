@@ -22,6 +22,14 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 - `bc250-fan-curve` in the host `bc250fc` repo is now the single writer of
   CPU_FAN1; the CLI and Decky plugin no longer stop or race the daemon.
 
+### Fixed
+
+- Fantastic BC250 resolved its settings from `/home/deck` because
+  `usdpl_back::api::dirs::home()` looks up the gamescope user through `who`,
+  which is empty in this container. The backend now prefers `$HOME` (set by
+  `main.py` to `/home/steamheadless`), so the Quick Access Menu toggle
+  persists and the manual heartbeat is written.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
