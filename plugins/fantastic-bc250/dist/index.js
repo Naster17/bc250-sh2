@@ -1049,12 +1049,57 @@
   var name = "";
   var version = "";
   var curve_backup = [];
+  var DEFAULT_TEMPERATURE_CURVE = [
+      { x: 0.0, y: 0.25 },
+      { x: 0.4, y: 0.35 },
+      { x: 0.5, y: 0.43 },
+      { x: 0.6, y: 0.55 },
+      { x: 0.7, y: 0.69 },
+      { x: 0.8, y: 0.84 },
+      { x: 1.0, y: 1.0 },
+  ];
+  var TEMPERATURE_CURVE_KEY = "fantastic-bc250.temperature-curve";
+  function isFlatCurve(value) {
+      return value.length > 0
+          && value.every((point) => Math.abs(point.y - value[0].y) < 0.005);
+  }
+  function loadTemperatureCurve() {
+      try {
+          const raw = window.localStorage.getItem(TEMPERATURE_CURVE_KEY);
+          if (raw != null) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                  const points = parsed.filter((point) => typeof point?.x === "number" && typeof point?.y === "number");
+                  if (points.length > 0) {
+                      return points;
+                  }
+              }
+          }
+      }
+      catch (err) {
+          console.warn("Fantastic: could not read saved temperature curve", err);
+      }
+      return [];
+  }
+  var temperatureCurve = loadTemperatureCurve();
   var tempCache = -1337;
   var setTemperature_display = (_) => { };
   var fanRpmCache = -273;
   var setFanRpm_display = (_) => { };
   var manualSpeedTimer = null;
   var manualSpeedSeq = 0;
+  function rememberTemperatureCurve(value) {
+      if (value.length === 0 || isFlatCurve(value)) {
+          return;
+      }
+      temperatureCurve = value;
+      try {
+          window.localStorage.setItem(TEMPERATURE_CURVE_KEY, JSON.stringify(value));
+      }
+      catch (err) {
+          console.warn("Fantastic: could not save temperature curve", err);
+      }
+  }
   const Content = ({ serverAPI }) => {
       // const [result, setResult] = useState<number | undefined>();
       // const onClick = async () => {
@@ -1075,11 +1120,15 @@
       const [firstTime, setFirstTime] = React.useState(true);
       const [curveGlobal, setCurve_internal] = React.useState(curve_backup);
       const [manualSpeedGlobal, setManualSpeedState] = React.useState(0);
+      const [manualMode, setManualMode] = React.useState(false);
       const setCurve = (value) => {
           setCurve_internal(value);
           curve_backup = value;
           if (value.length > 0) {
-              const flat = value.every((point) => Math.abs(point.y - value[0].y) < 0.005);
+              const flat = isFlatCurve(value);
+              if (!flat) {
+                  rememberTemperatureCurve(value);
+              }
               const speed = flat
                   ? value[0].y
                   : value.reduce((sum, point) => sum + point.y, 0) / value.length;
@@ -1088,6 +1137,10 @@
       };
       const setManualSpeed = (value) => {
           setManualSpeedState(value);
+          if (!manualMode && curveGlobal.length > 0 && !isFlatCurve(curveGlobal)) {
+              rememberTemperatureCurve(curveGlobal);
+          }
+          setManualMode(true);
           if (!enabledGlobal) {
               setEnable(true);
               resolve(setEnabled(true), setEnable);
@@ -1117,6 +1170,42 @@
               }
               setCurve(current);
           }, 150);
+      };
+      const setTemperatureMode = (value) => {
+          const seq = ++manualSpeedSeq;
+          if (manualSpeedTimer != null) {
+              clearTimeout(manualSpeedTimer);
+              manualSpeedTimer = null;
+          }
+          if (!value) {
+              setManualMode(false);
+              resolve(setEnabled(false), setEnable);
+              return;
+          }
+          setManualMode(false);
+          const target = temperatureCurve.length > 0
+              ? temperatureCurve
+              : DEFAULT_TEMPERATURE_CURVE;
+          (async () => {
+              let current = await getCurve();
+              while (current.length > 0) {
+                  if (seq !== manualSpeedSeq) {
+                      return;
+                  }
+                  current = await removeCurvePoint(0);
+              }
+              for (const point of target) {
+                  if (seq !== manualSpeedSeq) {
+                      return;
+                  }
+                  current = await addCurvePoint(point);
+              }
+              if (seq !== manualSpeedSeq) {
+                  return;
+              }
+              setCurve(current);
+              resolve(setEnabled(true), setEnable);
+          })();
       };
       const [temperatureGlobal, setTemperature] = React.useState(tempCache);
       const [fanRpmGlobal, setFanRpm] = React.useState(fanRpmCache);
@@ -1269,7 +1358,12 @@
           setServerApi(serverAPI);
           resolve(getEnabled(), setEnable);
           resolve(getInterpolate(), setInterpol);
-          resolve(getCurve(), setCurve);
+          resolve(getCurve(), (value) => {
+              setCurve(value);
+              if (isFlatCurve(value)) {
+                  setManualMode(true);
+              }
+          });
           resolve(getTemperature(setTemperature_display), (_) => { });
           resolve(getFanRpm(setFanRpm_display), (_) => { });
           /*periodicHook = setInterval(function() {
@@ -1288,14 +1382,18 @@
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
               window.SP_REACT.createElement(deckyFrontendLib.Field, { label: "Current Temperature" }, temperatureGlobal.toFixed(1) + " °C")),
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
-              window.SP_REACT.createElement(deckyFrontendLib.SliderField, { label: "Fan Speed", description: "Manual flat curve; overrides temperature control", value: manualSpeedGlobal, min: 0, max: 100, step: 1, showValue: true, onChange: setManualSpeed })),
+              window.SP_REACT.createElement(deckyFrontendLib.SliderField, { label: "Manual Fan Speed", description: "Overrides the temperature curve; moving it turns the curve off", value: manualSpeedGlobal, min: 0, max: 100, step: 1, showValue: true, onChange: setManualSpeed })),
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
-              window.SP_REACT.createElement(deckyFrontendLib.ToggleField, { label: "Custom Fan Curve", description: "Overrides the BC-250 host fan curve", checked: enabledGlobal, onChange: (value) => {
-                      resolve(setEnabled(value), setEnable);
-                  } })),
-          enabledGlobal &&
+              window.SP_REACT.createElement(deckyFrontendLib.ToggleField, { label: "Temperature Fan Curve", description: "On: saved temperature curve. Off: host auto curve.", checked: enabledGlobal && !manualMode, onChange: setTemperatureMode })),
+          enabledGlobal && manualMode &&
+              window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
+                  window.SP_REACT.createElement(deckyFrontendLib.Field, { label: "Return to host auto curve", onClick: () => {
+                          setManualMode(false);
+                          resolve(setEnabled(false), setEnable);
+                      } }, "Software control")),
+          enabledGlobal && !manualMode &&
               window.SP_REACT.createElement("div", { className: deckyFrontendLib.staticClasses.PanelSectionTitle }, "Fan"),
-          enabledGlobal &&
+          enabledGlobal && !manualMode &&
               window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
                   window.SP_REACT.createElement(Canvas, { draw: drawCanvas, width: 268, height: 200, style: {
                           "width": "268px",
@@ -1307,7 +1405,7 @@
                           "border-radius": "4px",
                           //"margin":"auto",
                       }, onClick: (e) => onClickCanvas(e) })),
-          enabledGlobal &&
+          enabledGlobal && !manualMode &&
               window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
                   window.SP_REACT.createElement(deckyFrontendLib.ToggleField, { label: "Linear Interpolation", description: "Pretends a straight line connects points", checked: interpolGlobal, onChange: (value) => {
                           resolve(setInterpolate(value), setInterpol);

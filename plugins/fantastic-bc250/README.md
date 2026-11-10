@@ -35,7 +35,7 @@ host CLI uses the same file with `source=cli`, so `doas fan 50` and
 
 | Path | Purpose |
 |---|---|
-| `dist/index.js` | Upstream Fantastic 0.5.1 frontend, unmodified |
+| `dist/index.js` | Fantastic 0.5.1 frontend with the BC-250 fan panel |
 | `bin/backend` | Patched Rust backend (BC-250 control bridge) |
 | `backend-rs/` | Patched backend source, GPL-3.0-only |
 | `frontend-src/` | Upstream frontend source, for reference |
@@ -59,8 +59,21 @@ The Steam Headless BC-250 image bakes this directory into
 `/opt/decky-loader/plugins/fantastic-bc250` and `decky-loader-seed` copies it
 into `~/homebrew/plugins/fantastic-bc250` on first boot. It is installed by
 default but disabled: the host curve remains authoritative until the user
-enables the custom fan curve in the Decky Quick Access Menu. The panel also
-has a **Fan Speed** slider for a direct flat 0–100% target.
+enables the temperature curve in the Decky Quick Access Menu.
+
+The panel has two independent ways to take control:
+
+- **Manual Fan Speed** writes a flat 0–100% target. Moving the slider switches
+  to manual mode and unchecks **Temperature Fan Curve**.
+- **Temperature Fan Curve** restores the last saved temperature curve (or the
+  built-in default if none has been saved yet) and resumes temperature-based
+  control.
+- When manual mode is active, **Return to host auto curve** releases the fan
+  back to the host daemon immediately; turning the temperature-curve toggle
+  off does the same.
+
+The last temperature curve is kept in the plugin's `localStorage`, so opening
+or reloading the panel does not lose it after a manual override.
 
 The backend resolves `~/.config/fantastic/fantastic.json` from `$HOME`, which
 `main.py` sets to `/home/steamheadless`; `usdpl_back::api::dirs::home()` is not

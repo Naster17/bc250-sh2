@@ -181,7 +181,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.7.0` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.7.1` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.

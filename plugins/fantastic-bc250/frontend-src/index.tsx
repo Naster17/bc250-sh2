@@ -27,8 +27,57 @@ var name: string = "";
 var version: string = "";
 
 var curve_backup: {x: number, y: number}[] = [];
+
+const DEFAULT_TEMPERATURE_CURVE: {x: number, y: number}[] = [
+  {x: 0.0, y: 0.25},
+  {x: 0.4, y: 0.35},
+  {x: 0.5, y: 0.43},
+  {x: 0.6, y: 0.55},
+  {x: 0.7, y: 0.69},
+  {x: 0.8, y: 0.84},
+  {x: 1.0, y: 1.0},
+];
+const TEMPERATURE_CURVE_KEY = "fantastic-bc250.temperature-curve";
+
+function isFlatCurve(value: {x: number, y: number}[]): boolean {
+  return value.length > 0
+    && value.every((point) => Math.abs(point.y - value[0].y) < 0.005);
+}
+
+function loadTemperatureCurve(): {x: number, y: number}[] {
+  try {
+    const raw = window.localStorage.getItem(TEMPERATURE_CURVE_KEY);
+    if (raw != null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const points = parsed.filter((point: any) =>
+          typeof point?.x === "number" && typeof point?.y === "number");
+        if (points.length > 0) {
+          return points;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Fantastic: could not read saved temperature curve", err);
+  }
+  return [];
+}
+
+var temperatureCurve: {x: number, y: number}[] = loadTemperatureCurve();
 var manualSpeedTimer: any = null;
 var manualSpeedSeq: number = 0;
+
+function rememberTemperatureCurve(value: {x: number, y: number}[]): void {
+  if (value.length === 0 || isFlatCurve(value)) {
+    return;
+  }
+  temperatureCurve = value;
+  try {
+    window.localStorage.setItem(TEMPERATURE_CURVE_KEY, JSON.stringify(value));
+  } catch (err) {
+    console.warn("Fantastic: could not save temperature curve", err);
+  }
+}
 
 var tempCache: number = -1337;
 var setTemperature_display = (_: number) => {};
@@ -58,12 +107,16 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
   const [firstTime, setFirstTime] = useState<boolean>(true);
   const [curveGlobal, setCurve_internal] = useState<{x: number, y: number}[]>(curve_backup);
   const [manualSpeedGlobal, setManualSpeedState] = useState<number>(0);
+  const [manualMode, setManualMode] = useState<boolean>(false);
 
   const setCurve = (value: {x: number, y: number}[]) => {
     setCurve_internal(value);
     curve_backup = value;
     if (value.length > 0) {
-      const flat = value.every((point) => Math.abs(point.y - value[0].y) < 0.005);
+      const flat = isFlatCurve(value);
+      if (!flat) {
+        rememberTemperatureCurve(value);
+      }
       const speed = flat
         ? value[0].y
         : value.reduce((sum, point) => sum + point.y, 0) / value.length;
@@ -73,6 +126,10 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
 
   const setManualSpeed = (value: number) => {
     setManualSpeedState(value);
+    if (!manualMode && curveGlobal.length > 0 && !isFlatCurve(curveGlobal)) {
+      rememberTemperatureCurve(curveGlobal);
+    }
+    setManualMode(true);
     if (!enabledGlobal) {
       setEnable(true);
       backend.resolve(backend.setEnabled(true), setEnable);
@@ -103,6 +160,44 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
       }
       setCurve(current);
     }, 150);
+  };
+
+  const setTemperatureMode = (value: boolean) => {
+    const seq = ++manualSpeedSeq;
+    if (manualSpeedTimer != null) {
+      clearTimeout(manualSpeedTimer);
+      manualSpeedTimer = null;
+    }
+    if (!value) {
+      setManualMode(false);
+      backend.resolve(backend.setEnabled(false), setEnable);
+      return;
+    }
+
+    setManualMode(false);
+    const target = temperatureCurve.length > 0
+      ? temperatureCurve
+      : DEFAULT_TEMPERATURE_CURVE;
+    (async () => {
+      let current = await backend.getCurve();
+      while (current.length > 0) {
+        if (seq !== manualSpeedSeq) {
+          return;
+        }
+        current = await backend.removeCurvePoint(0);
+      }
+      for (const point of target) {
+        if (seq !== manualSpeedSeq) {
+          return;
+        }
+        current = await backend.addCurvePoint(point);
+      }
+      if (seq !== manualSpeedSeq) {
+        return;
+      }
+      setCurve(current);
+      backend.resolve(backend.setEnabled(true), setEnable);
+    })();
   };
 
   const [temperatureGlobal, setTemperature] = useState<number>(tempCache);
@@ -266,7 +361,12 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
     setServerApi(serverAPI);
     backend.resolve(backend.getEnabled(), setEnable);
     backend.resolve(backend.getInterpolate(), setInterpol);
-    backend.resolve(backend.getCurve(), setCurve);
+    backend.resolve(backend.getCurve(), (value: {x: number, y: number}[]) => {
+      setCurve(value);
+      if (isFlatCurve(value)) {
+        setManualMode(true);
+      }
+    });
     backend.resolve(backend.getTemperature(setTemperature_display), (_: any) => {});
     backend.resolve(backend.getFanRpm(setFanRpm_display), (_: any) => {});
 
@@ -309,8 +409,8 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
       </PanelSectionRow>
       <PanelSectionRow>
         <SliderField
-          label="Fan Speed"
-          description="Manual flat curve; overrides temperature control"
+          label="Manual Fan Speed"
+          description="Overrides the temperature curve; moving it turns the curve off"
           value={manualSpeedGlobal}
           min={0}
           max={100}
@@ -321,20 +421,30 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
       </PanelSectionRow>
       <PanelSectionRow>
         <ToggleField
-          label="Custom Fan Curve"
-          description="Overrides SteamOS fan curve"
-          checked={enabledGlobal}
-          onChange={(value: boolean) => {
-            backend.resolve(backend.setEnabled(value), setEnable);
-          }}
+          label="Temperature Fan Curve"
+          description="On: saved temperature curve. Off: host auto curve."
+          checked={enabledGlobal && !manualMode}
+          onChange={setTemperatureMode}
         />
       </PanelSectionRow>
-      { enabledGlobal &&
+      { enabledGlobal && manualMode &&
+      <PanelSectionRow>
+        <Field
+          label="Return to host auto curve"
+          onClick={() => {
+            setManualMode(false);
+            backend.resolve(backend.setEnabled(false), setEnable);
+          }}>
+          Software control
+        </Field>
+      </PanelSectionRow>
+      }
+      { enabledGlobal && !manualMode &&
       <div className={staticClasses.PanelSectionTitle}>
         Fan
       </div>
       }
-      { enabledGlobal &&
+      { enabledGlobal && !manualMode &&
       <PanelSectionRow>
         <Canvas draw={drawCanvas} width={268} height={200} style={{
           "width": "268px",
@@ -348,7 +458,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
         }} onClick={(e: any) => onClickCanvas(e)}/>
       </PanelSectionRow>
       }
-      { enabledGlobal &&
+      { enabledGlobal && !manualMode &&
       <PanelSectionRow>
         <ToggleField
           label="Linear Interpolation"

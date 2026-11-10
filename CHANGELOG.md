@@ -3,6 +3,24 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.7.1] - 2026-11-10
+
+### Changed
+
+- Repository renamed from `steam-headless-bc250` to `bc250-sh2`; clone URLs,
+  OCI source labels, systemd `Documentation=` links and the Fantastic release
+  link now use `https://github.com/Naster17/bc250-sh2`. The Docker image and
+  runtime unit names are unchanged.
+- Fantastic BC250 plugin version is `1.0.5`.
+
+### Fixed
+
+- Fantastic's manual fan-speed slider no longer destroys the temperature
+  curve. Moving the slider switches to manual mode and unchecks the curve;
+  enabling **Temperature Fan Curve** restores the saved/default temperature
+  curve, and **Return to host auto curve** releases control back to the host
+  daemon. The last curve is persisted in `localStorage`.
+
 ## [1.7.0] - 2026-11-10
 
 ### Added
