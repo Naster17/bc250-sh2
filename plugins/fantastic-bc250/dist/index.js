@@ -1246,7 +1246,7 @@
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
               window.SP_REACT.createElement(deckyFrontendLib.Field, { label: "Current Temperature" }, temperatureGlobal.toFixed(1) + " °C")),
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
-              window.SP_REACT.createElement(deckyFrontendLib.ToggleField, { label: "Custom Fan Curve", description: "Overrides SteamOS fan curve", checked: enabledGlobal, onChange: (value) => {
+              window.SP_REACT.createElement(deckyFrontendLib.ToggleField, { label: "Custom Fan Curve", description: "Overrides the BC-250 host fan curve", checked: enabledGlobal, onChange: (value) => {
                       resolve(setEnabled(value), setEnable);
                   } })),
           enabledGlobal &&
@@ -1269,7 +1269,7 @@
                           resolve(setInterpolate(value), setInterpol);
                       } })),
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
-              window.SP_REACT.createElement(deckyFrontendLib.Field, { label: name, onClick: () => { deckyFrontendLib.Navigation.NavigateToExternalWeb("https://git.ngni.us/NG-SD-Plugins/Fantastic/releases"); } }, "v" + version)),
+              window.SP_REACT.createElement(deckyFrontendLib.Field, { label: name, onClick: () => { deckyFrontendLib.Navigation.NavigateToExternalWeb("https://github.com/Naster17/steam-headless-bc250/releases"); } }, "v" + version)),
           (version?.includes("alpha") || version?.includes("beta")) && window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
               window.SP_REACT.createElement(deckyFrontendLib.Field, { label: "USDPL", onClick: () => { deckyFrontendLib.Navigation.NavigateToExternalWeb("https://git.ngni.us/NG-SD-Plugins/usdpl-rs"); } },
                   "v",
@@ -1291,7 +1291,7 @@
           ico = window.SP_REACT.createElement(SiOnlyfans, null);
       }
       return {
-          title: window.SP_REACT.createElement("div", { className: deckyFrontendLib.staticClasses.Title }, "Fantastic"),
+          title: window.SP_REACT.createElement("div", { className: deckyFrontendLib.staticClasses.Title }, "Fantastic BC250"),
           content: window.SP_REACT.createElement(Content, { serverAPI: serverApi }),
           icon: ico,
           onDismount() {
