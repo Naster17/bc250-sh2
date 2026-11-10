@@ -47,7 +47,8 @@ COPY rootfs/ /
 # boot. The release asset is architecture-specific; this deployment is x86_64.
 RUN set -eux; \
     install -d -m 0755 /opt/decky-loader; \
-    curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 20 \
+    curl --fail --location --ipv4 --retry 3 --retry-delay 2 \
+        --connect-timeout 20 --max-time 300 \
         "https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${DECKY_LOADER_VERSION}/PluginLoader" \
         --output /opt/decky-loader/PluginLoader; \
     echo "${DECKY_LOADER_SHA256}  /opt/decky-loader/PluginLoader" | sha256sum -c -; \
