@@ -49,16 +49,34 @@ fi
 # First-party Decky plugins are baked under /opt/decky-loader/plugins.  Seed
 # them only when the user does not already have that plugin directory; the
 # Decky store and the user's own installs remain authoritative afterwards.
+# Plugins carrying .steam-headless-managed are ours: replace them when the
+# image version differs so a container update also updates the plugin.  Their
+# settings live outside the plugin directory and are preserved.
+plugin_version() {
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" 2>/dev/null | head -n 1
+}
+
 if [[ -d "${plugin_source}" ]]; then
     shopt -s nullglob
     for plugin_src in "${plugin_source}"/*; do
         [[ -d "${plugin_src}" ]] || continue
         plugin_name="$(basename "${plugin_src}")"
         plugin_dest="${brew}/plugins/${plugin_name}"
+        managed=0
+        [[ -f "${plugin_src}/.steam-headless-managed" ]] && managed=1
+
         if [[ ! -e "${plugin_dest}" ]]; then
             cp -a "${plugin_src}" "${plugin_dest}"
             chown -R "${uid}:${gid}" "${plugin_dest}"
             echo "decky-loader-seed: installed Decky plugin ${plugin_name}"
+        elif [[ "${managed}" -eq 1 ]] && {
+            [[ ! -f "${plugin_dest}/.steam-headless-managed" ]] ||
+            [[ "$(plugin_version "${plugin_src}/plugin.json")" != "$(plugin_version "${plugin_dest}/plugin.json")" ]];
+        }; then
+            rm -rf "${plugin_dest}"
+            cp -a "${plugin_src}" "${plugin_dest}"
+            chown -R "${uid}:${gid}" "${plugin_dest}"
+            echo "decky-loader-seed: updated Decky plugin ${plugin_name} to $(plugin_version "${plugin_src}/plugin.json")"
         else
             echo "decky-loader-seed: keeping existing Decky plugin ${plugin_name}"
         fi

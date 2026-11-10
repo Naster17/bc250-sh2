@@ -52,7 +52,9 @@ with the Steam Deck `jupiter` backend replaced by the BC-250 bridge.
 It is installed but **disabled by default**: the host curve keeps running until
 you enable the custom curve in the Quick Access Menu. Disabling it, closing the
 plugin, or stopping the container returns control to the host daemon within
-five seconds.
+five seconds. The plugin carries a managed marker; a container image with a
+new plugin version replaces the plugin directory on boot, while
+`~/.config/fantastic/fantastic.json` is preserved.
 
 ## Host setup
 
