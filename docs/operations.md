@@ -108,7 +108,7 @@ curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8483/     # 401 = po
 
 docker exec steam-headless systemctl is-active decky-loader-seed plugin_loader
 docker exec steam-headless ss -lnt | grep -E ':(1337|8080)\b'         # Decky + CEF
-docker exec steam-headless curl -s http://127.0.0.1:8080/json/version | jq -r .Browser
+docker exec steam-headless sh -c 'curl -s http://127.0.0.1:8080/json/version | jq -r .Browser'
 
 docker exec steam-headless bash -lc 'P=$(cat /run/steam-headless/credentials/sunshine-proxy-password);
   curl -sk -u steamheadless:$P https://127.0.0.1:47990/api/apps'

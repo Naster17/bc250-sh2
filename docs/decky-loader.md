@@ -48,7 +48,7 @@ downgrade a loader the user has updated from the UI.
 docker exec steam-headless systemctl is-active decky-loader-seed plugin_loader
 docker exec steam-headless journalctl -u plugin_loader -n 100 --no-pager
 docker exec steam-headless ss -lntp | grep -E ':(1337|8080)\b'
-docker exec steam-headless curl -s http://127.0.0.1:8080/json/version | jq -r .Browser
+docker exec steam-headless sh -c 'curl -s http://127.0.0.1:8080/json/version | jq -r .Browser'
 docker exec steam-headless curl -fsS http://127.0.0.1:1337/frontend/index.js -o /dev/null
 docker exec steam-headless ls -l \
   /home/steamheadless/homebrew/services/PluginLoader \
