@@ -42,7 +42,6 @@ LABEL org.opencontainers.image.title="Steam Headless BC-250" \
 # The curated rootfs mirrors the container filesystem; one COPY keeps the layer
 # count down. .dockerignore keeps VCS, docs and local data out of the context.
 COPY rootfs/ /
-COPY plugins/ /opt/decky-loader/plugins/
 
 # Ship Decky's PluginLoader in the image instead of downloading it at first
 # boot. The release asset is architecture-specific; this deployment is x86_64.
@@ -55,6 +54,10 @@ RUN set -eux; \
     chmod 0755 /opt/decky-loader/PluginLoader; \
     printf '%s\n' "${DECKY_LOADER_VERSION}" >/opt/decky-loader/VERSION; \
     chmod 0644 /opt/decky-loader/VERSION
+
+# Keep this copy after the pinned Decky download so plugin-only changes do not
+# invalidate the 33 MB PluginLoader layer.
+COPY plugins/ /opt/decky-loader/plugins/
 
 RUN set -eux; \
     chmod 0755 /usr/local/bin/gamescope-no-force-grab \
