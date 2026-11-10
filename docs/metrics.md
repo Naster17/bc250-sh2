@@ -133,7 +133,7 @@ runlevel, so a host boot leaves the machine idle. Start it explicitly:
 doas rc-service docker start          # only after a boot
 docker start steam-headless           # plain start, keeps the existing container
 # or, after changing compose/Dockerfile:
-cd ~/steam-headless-bc250 && docker compose up -d
+cd ~/bc250-sh2 && docker compose up -d
 ```
 
 `docker start` re-runs the container with its configured mounts, so the host's

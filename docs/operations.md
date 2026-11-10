@@ -1,4 +1,4 @@
-# Operations manual — `steam-headless-bc250`
+# Operations manual — `bc250-sh2`
 
 Deployment notes for the BC-250 host. This deployment's host, paths, portal URL,
 timezone and SteamID are recorded in [site.md](site.md). The image is built from
@@ -50,7 +50,7 @@ mkdir -p "${SH2_DIR:-/opt/steam-headless}"/{data/home,games,state,journal}
 ## 3. Deploy / update
 
 ```bash
-cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
+cd "${REPO_DIR:-$HOME/bc250-sh2}"
 make bootstrap                  # .env, host fan, dirs, build, up, health
 docker compose logs -f
 ```
@@ -325,7 +325,7 @@ SHUI lands on KWin (invisible under the fullscreen gamescope), so:
 ## 13. Daily operations
 
 ```bash
-cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
+cd "${REPO_DIR:-$HOME/bc250-sh2}"
 docker compose up -d                 # start / apply compose changes
 docker compose restart
 docker compose stop

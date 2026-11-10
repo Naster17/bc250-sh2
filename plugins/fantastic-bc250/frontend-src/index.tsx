@@ -363,7 +363,7 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
       <PanelSectionRow>
         <Field
           label={name}
-          onClick={()=> { Navigation.NavigateToExternalWeb("https://git.ngni.us/NG-SD-Plugins/Fantastic/releases"); }}>
+          onClick={()=> { Navigation.NavigateToExternalWeb("https://github.com/Naster17/bc250-sh2/releases"); }}>
           {"v" + version}
         </Field>
       </PanelSectionRow>

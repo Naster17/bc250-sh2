@@ -1,4 +1,4 @@
-# Steam Headless 2 — BC-250 build
+# bc250-sh2 — Steam Headless 2 for BC-250
 
 Thin, reproducible layer on top of `josh5/steam-headless:2` that turns the
 container into a SteamOS-like game console for an **AMD BC-250 (Cyan Skillfish,
@@ -71,8 +71,8 @@ Runtime knobs live in `docker-compose.yml`:
 ## Quick start
 
 ```bash
-git clone https://github.com/Naster17/steam-headless-bc250.git
-cd steam-headless-bc250
+git clone https://github.com/Naster17/bc250-sh2.git
+cd bc250-sh2
 make bootstrap
 ```
 
@@ -96,7 +96,7 @@ they are missing; `make host-fan` installs only the host fan arbiter.
 them on the command line:
 
 ```bash
-make deploy DEPLOY_HOST=user@host DEPLOY_DIR=~/steam-headless-bc250
+make deploy DEPLOY_HOST=user@host DEPLOY_DIR=~/bc250-sh2
 ```
 
 The working tree must be clean, and the host checkout must be on the same branch

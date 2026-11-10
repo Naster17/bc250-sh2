@@ -5,7 +5,7 @@ IMAGE_VERSION ?= 1.7.0
 GIT_REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DEPLOY_HOST ?= $(shell grep -m1 '^DEPLOY_HOST=' .env 2>/dev/null | cut -d= -f2)
 DEPLOY_DIR ?= $(shell grep -m1 '^DEPLOY_DIR=' .env 2>/dev/null | cut -d= -f2)
-DEPLOY_DIR := $(if $(DEPLOY_DIR),$(DEPLOY_DIR),~/steam-headless-bc250)
+DEPLOY_DIR := $(if $(DEPLOY_DIR),$(DEPLOY_DIR),~/bc250-sh2)
 SH2_DIR ?= $(shell grep -m1 '^SH2_DIR=' .env 2>/dev/null | cut -d= -f2)
 
 .DEFAULT_GOAL := help

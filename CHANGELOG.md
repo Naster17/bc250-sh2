@@ -208,8 +208,6 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   still starts and Sunshine scales the previous mode; the daemon journal records
   the failure.
 
-## [1.4.10] - 2026-11-10
-
 ### Documented
 
 - `docs/steam-shortcuts.md`: binary `shortcuts.vdf` layout, appid calculation,
@@ -224,6 +222,20 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   `accounts.json` format (native and Flatpak), the canonical Steam non-Steam
   shortcut (binary VDF, CRC appid, quoted `Exe`), and the `steam -applaunch`
   limitation.
+
+### Fixed
+- Prism Launcher and Minecraft exited at `Unrecognized user type: offline` before
+  `Setting user`, with no crash report. The container mounts `/tmp` as a
+  `tmpfs` with `noexec`; LWJGL extracts `liblwjgl.so` there and `dlopen` fails
+  with `UnsatisfiedLinkError: ... failed to map segment from shared object`.
+  Both the NeoForge and a vanilla 1.21.1 instance were affected, so Controlify
+  and MidnightControls were not the cause. Set
+  `-Djava.io.tmpdir=/home/steamheadless/.cache/prism-tmp` in the JVM arguments
+  of each instance; the game then reaches `Setting user` and `Backend library:
+  LWJGL version 3.3.3+5`.
+- The live `1.21.1` instance now uses MidnightControls `1.10.0.1`; Controlify
+  and YACL were removed during diagnosis. Both the live instance and the
+  vanilla `1.21.1(1)` instance carry the JVM tmpdir fix.
 
 ## [1.4.8] - 2026-11-08
 

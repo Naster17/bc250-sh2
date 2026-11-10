@@ -37,7 +37,7 @@ LABEL org.opencontainers.image.title="Steam Headless BC-250" \
       org.opencontainers.image.description="Thin Steam Headless 2 layer for the AMD BC-250 (Cyan Skillfish / RADV GFX1013)" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${GIT_REVISION}" \
-      org.opencontainers.image.source="https://github.com/Naster17/steam-headless-bc250" \
+      org.opencontainers.image.source="https://github.com/Naster17/bc250-sh2" \
       org.opencontainers.image.licenses="MIT" \
       decky-loader.version="${DECKY_LOADER_VERSION}"
 

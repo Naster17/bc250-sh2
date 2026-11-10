@@ -1,6 +1,6 @@
 [Unit]
 Description=Steam Headless dynamic display mode daemon
-Documentation=https://github.com/Naster17/steam-headless-bc250
+Documentation=https://github.com/Naster17/bc250-sh2
 After=steam-headless-compositor.service
 Before=steam-headless-sunshine.service
 

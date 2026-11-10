@@ -1313,7 +1313,7 @@
                           resolve(setInterpolate(value), setInterpol);
                       } })),
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
-              window.SP_REACT.createElement(deckyFrontendLib.Field, { label: name, onClick: () => { deckyFrontendLib.Navigation.NavigateToExternalWeb("https://github.com/Naster17/steam-headless-bc250/releases"); } }, "v" + version)),
+              window.SP_REACT.createElement(deckyFrontendLib.Field, { label: name, onClick: () => { deckyFrontendLib.Navigation.NavigateToExternalWeb("https://github.com/Naster17/bc250-sh2/releases"); } }, "v" + version)),
           (version?.includes("alpha") || version?.includes("beta")) && window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
               window.SP_REACT.createElement(deckyFrontendLib.Field, { label: "USDPL", onClick: () => { deckyFrontendLib.Navigation.NavigateToExternalWeb("https://git.ngni.us/NG-SD-Plugins/usdpl-rs"); } },
                   "v",

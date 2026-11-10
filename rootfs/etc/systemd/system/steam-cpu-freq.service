@@ -1,6 +1,6 @@
 [Unit]
 Description=Publish CPU clock for Steam's performance overlay
-Documentation=https://github.com/Naster17/steam-headless-bc250
+Documentation=https://github.com/Naster17/bc250-sh2
 # The BC-250 kernel registers no cpufreq driver, so
 # /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq does not exist and Steam's
 # overlay shows a constant. This service shadows each cpuN directory inside the
