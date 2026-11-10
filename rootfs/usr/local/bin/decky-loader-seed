@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Seed Decky Loader into the persistent Steam home.
+#
+# The image carries a pinned PluginLoader under /opt/decky-loader, so a fresh
+# container does not need GitHub access to start Decky. Existing installs are
+# left alone: Decky's own updater owns ~/homebrew once it exists, and copying
+# the image version over a newer self-update would be a downgrade.
+set -euo pipefail
+
+readonly home=/home/steamheadless
+readonly source=/opt/decky-loader/PluginLoader
+readonly version_file=/opt/decky-loader/VERSION
+readonly brew="${home}/homebrew"
+readonly services="${brew}/services"
+readonly target="${services}/PluginLoader"
+readonly installed_version="${services}/.loader.version"
+
+[[ -d "${home}" ]] || {
+    echo "decky-loader-seed: ${home} is missing" >&2
+    exit 1
+}
+[[ -x "${source}" ]] || {
+    echo "decky-loader-seed: ${source} is missing" >&2
+    exit 1
+}
+[[ -r "${version_file}" ]] || {
+    echo "decky-loader-seed: ${version_file} is missing" >&2
+    exit 1
+}
+
+uid="$(stat -c '%u' "${home}")"
+gid="$(stat -c '%g' "${home}")"
+
+install -d -o "${uid}" -g "${gid}" -m 0755 \
+    "${brew}" "${brew}/plugins" "${brew}/settings" "${brew}/data" \
+    "${brew}/logs" "${services}"
+
+if [[ ! -x "${target}" ]]; then
+    install -o "${uid}" -g "${gid}" -m 0755 "${source}" "${target}"
+    printf '%s\n' "$(<"${version_file}")" >"${installed_version}"
+    chown "${uid}:${gid}" "${installed_version}"
+    chmod 0644 "${installed_version}"
+    echo "decky-loader-seed: installed $(<"${version_file}") into ${target}"
+else
+    echo "decky-loader-seed: keeping existing ${target} ($(cat "${installed_version}" 2>/dev/null || echo version unknown))"
+fi
+
+# Steam reads this marker at startup. Create it before the session starts so
+# CEF remote debugging (localhost:8080) is available to the plugin loader.
+# The file is intentionally empty; only its presence matters.
+steam_root="${home}/.local/share/Steam"
+if [[ ! -d "${steam_root}" ]]; then
+    install -d -o "${uid}" -g "${gid}" -m 0755 "${steam_root}"
+fi
+install -o "${uid}" -g "${gid}" -m 0644 /dev/null \
+    "${steam_root}/.cef-enable-remote-debugging"
+
+# .steam/steam normally links to the real Steam root. Touch through it as well
+# when it exists, matching the path Decky's SteamOS installer uses.
+if [[ -d "${home}/.steam/steam" ]]; then
+    install -o "${uid}" -g "${gid}" -m 0644 /dev/null \
+        "${home}/.steam/steam/.cef-enable-remote-debugging"
+fi
+
+echo "decky-loader-seed: CEF remote debugging marker present for ${steam_root}"

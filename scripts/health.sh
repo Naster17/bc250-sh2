@@ -5,7 +5,8 @@ set -u
 
 CONTAINER="${CONTAINER:-steam-headless}"
 BASE_UNITS="steam-headless-authd steam-headless-shinputd steam-headless-compositor \
-steam-headless-steam steam-headless-sunshine steam-headless-shui"
+steam-headless-steam steam-headless-sunshine steam-headless-shui \
+decky-loader-seed plugin_loader"
 
 fail=0
 row() { printf '%-34s %s\n' "$1" "$2"; }

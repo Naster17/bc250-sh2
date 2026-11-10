@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 COMPOSE ?= docker compose
 CONTAINER ?= steam-headless
-IMAGE_VERSION ?= 1.4.14
+IMAGE_VERSION ?= 1.5.0
 GIT_REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DEPLOY_HOST ?= $(shell grep -m1 '^DEPLOY_HOST=' .env 2>/dev/null | cut -d= -f2)
 DEPLOY_DIR ?= $(shell grep -m1 '^DEPLOY_DIR=' .env 2>/dev/null | cut -d= -f2)

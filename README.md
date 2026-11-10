@@ -25,6 +25,7 @@ flowchart LR
 - [Session modes](#session-modes)
 - [Operating notes](#operating-notes)
 - [Dynamic per-client display mode](#dynamic-per-client-display-mode)
+- [Decky Loader](#decky-loader)
 - [Custom boot / suspend animations](#custom-boot--suspend-animations)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -41,6 +42,7 @@ flowchart LR
 | `rootfs/usr/share/steam-headless-custom/apps.json` | Two stream-only tiles: `Desktop` and `Steam \| Game Mode` (no `cmd`, so nothing spawns a second Steam). |
 | `rootfs/usr/local/bin/steam-display-request` + `rootfs/usr/local/bin/steam-display-syncd` + `rootfs/etc/systemd/system/steam-display-syncd.service` | **Dynamic per-client display mode.** Sunshine runs the unprivileged request helper at stream start; the root daemon applies `SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS` to the KWin virtual output and, in gaming mode, relaunches gamescope and Steam with the same output size and refresh. Moonlight's 720p60, 1080p90 or 1280x800 request therefore changes what the game actually renders, not just what Sunshine scales. |
 | `rootfs/usr/local/bin/steam-controller-patch` + `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | Adds a **500 ms long-press on Select → Quick Access Menu** (`controller_action system_key_1`, the right-hand panel with Performance/Friends) to the default Big Picture, Desktop and per-game Xbox layouts. Useful when the controller's Guide button is unreliable, since Steam's own chords all require Guide. Every patched file keeps its exact original byte size — Steam verifies `controller_base` against its depot manifest and re-extracts mismatching files. Re-applied on every boot, because a Steam client update restores the stock files. |
+| `rootfs/opt/decky-loader/LICENSE` + `rootfs/usr/local/bin/decky-loader-seed` + `rootfs/etc/systemd/system/{decky-loader-seed,plugin_loader}.service` | **Decky Loader `v3.3.1`.** The pinned release is baked into `/opt/decky-loader`, seeded into `~/homebrew` on first boot, and started by `plugin_loader.service` as root. The seed also writes Steam's `.cef-enable-remote-debugging` marker before the session starts, so Decky can inject its QAM menu. See [docs/decky-loader.md](docs/decky-loader.md). |
 | `rootfs/usr/local/bin/steam-gpu-load` + `rootfs/etc/systemd/system/steam-gpu-load.service` | Publishes GPU utilisation. The BC-250 driver answers `gpu_busy_percent` with `EOPNOTSUPP`, and the `gpu_metrics` table reports `0xFFFF` for `average_gfx_activity`, which MangoHud divides by 100 and renders as `655%`. The daemon rewrites both nodes inside the container from the driver's own centipercent value, falling back to per-`drm-client-id` `drm-engine-gfx` deltas. |
 | `rootfs/usr/local/bin/steam-cpu-freq` + `rootfs/etc/systemd/system/steam-cpu-freq.service` | Publishes the CPU clock. The BC-250 kernel registers no cpufreq driver, so `cpu*/cpufreq/scaling_cur_freq` does not exist and the overlay shows a constant. The service shadows each `cpuN` directory with a view that adds those files, fed from `/proc/cpuinfo`. |
 
@@ -68,7 +70,7 @@ cd steam-headless-bc250
 
 cp .env.example .env          # set SH2_DIR / PUID / PGID / TZ
 make dirs                     # host dirs + metric seed files compose mounts
-make build                    # :2 plus the :1.4.14 rollback tag
+make build                    # :2 plus the :1.5.0 rollback tag
 make up                       # start the container
 docker compose logs -f        # first boot prints the SHUI bootstrap password
 ```
@@ -168,7 +170,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.4.14` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.5.0` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
@@ -247,6 +249,22 @@ docker exec steam-headless journalctl -u steam-display-syncd -f
 docker exec steam-headless journalctl -u steam-headless-sunshine -f  # "Executing Do Cmd"
 ```
 
+## Decky Loader
+
+Decky Loader `v3.3.1` is pinned into the image under `/opt/decky-loader`. On
+every boot, `decky-loader-seed.service` runs before the session and copies the
+loader into `~/homebrew` only when no install exists; it also writes Steam's
+`.cef-enable-remote-debugging` marker. `plugin_loader.service` then runs as
+root on `127.0.0.1:1337` and injects Decky into the gamepad UI through Steam's
+CEF endpoint on `127.0.0.1:8080`.
+
+Open the Quick Access Menu (long-press `Select`, or Steam's Guide chord) and
+select the Decky plug icon. The store icon installs plugins; internet access is
+required. Existing `~/homebrew` state is never overwritten by a container
+recreate, so Decky's own updater stays authoritative once it has run.
+
+Full details: [docs/decky-loader.md](docs/decky-loader.md).
+
 ## Custom boot / suspend animations
 
 Personal media is deliberately **not** in this repository. Steam reads custom
@@ -279,6 +297,7 @@ docs/README.md            # documentation index
 docs/site.md              # this deployment's host, paths, SteamID
 docs/operations.md        # deploy, host layout, ports, session modes, daily ops, backup
 docs/controller.md        # Select long-press → Quick Access Menu
+docs/decky-loader.md      # Decky v3.3.1: boot seed, QAM, updates, troubleshooting
 docs/metrics.md           # BC-250 GPU/CPU telemetry
 docs/troubleshooting.md   # symptom → fix
 docs/steam-shortcuts.md   # binary shortcuts.vdf, appid, verification
@@ -291,7 +310,11 @@ rootfs/
     steam-gpu-load.service
     steam-cpu-freq.service
     steam-display-syncd.service
+    decky-loader-seed.service
+    plugin_loader.service
+  opt/decky-loader/LICENSE         # PluginLoader is downloaded at build time
   usr/local/bin/
+    decky-loader-seed
     gamescope-no-force-grab
     steam-controller-patch
     steam-cpu-freq
@@ -306,13 +329,15 @@ rootfs/
 
 The [docs index](docs/README.md) lists the topic pages. The
 [operations manual](docs/operations.md) covers deploy, host layout, ports,
-session modes, daily operations and recovery; controller, metrics and
-troubleshooting have their own pages. This deployment's host, paths and SteamID
-are in [docs/site.md](docs/site.md).
+session modes, daily operations and recovery; controller, Decky Loader, metrics
+and troubleshooting have their own pages. This deployment's host, paths and
+SteamID are in [docs/site.md](docs/site.md).
 
 ## License / credits
 
 Built on [`josh5/steam-headless`](https://github.com/Steam-Headless/docker-steam-headless)
 and [gamescope](https://github.com/ValveSoftware/gamescope). This repository only
-carries the deltas listed above. The layer in this repository is MIT-licensed;
+carries the deltas listed above. Decky Loader is bundled from
+[`SteamDeckHomebrew/decky-loader`](https://github.com/SteamDeckHomebrew/decky-loader)
+under GPL-2.0; its license is installed at `/opt/decky-loader/LICENSE`. The layer in this repository is MIT-licensed;
 see [`LICENSE`](LICENSE). The upstream projects keep their own licenses.

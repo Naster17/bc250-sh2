@@ -1,0 +1,21 @@
+[Unit]
+Description=Decky Loader (Steam Deck homebrew plugin loader)
+After=network.target decky-loader-seed.service
+Wants=decky-loader-seed.service
+
+[Service]
+Type=simple
+User=root
+Restart=always
+RestartSec=2
+KillMode=process
+TimeoutStopSec=15
+ExecStart=/home/steamheadless/homebrew/services/PluginLoader
+WorkingDirectory=/home/steamheadless/homebrew/services
+Environment=UNPRIVILEGED_PATH=/home/steamheadless/homebrew
+Environment=PRIVILEGED_PATH=/home/steamheadless/homebrew
+Environment=UNPRIVILEGED_USER=steamheadless
+Environment=LOG_LEVEL=INFO
+
+[Install]
+WantedBy=multi-user.target

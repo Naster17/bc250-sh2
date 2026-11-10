@@ -25,3 +25,6 @@
 | `Couldn't set default-sink [auto_null]: No such entity` | harmless, logged when a session ends |
 | container exits immediately | `docker logs steam-headless`: missing `/dev/uhid`, dropped `cgroup: private` / `writable-cgroups=true`, wrong `stop_signal` |
 | wrong file ownership inside container | `PUID`/`PGID` must equal `id -u` / `id -g` of the host owner of `SH2_DIR` |
+| no Decky icon in the Quick Access Menu | `plugin_loader` inactive, CEF `8080` closed, or the `.cef-enable-remote-debugging` marker was missing when Steam started → [decky-loader.md](decky-loader.md) |
+| `plugin_loader` restarts continuously | `~/homebrew/services/PluginLoader` missing or port `1337` taken → `systemctl restart decky-loader-seed`; check `journalctl -u plugin_loader` |
+| Decky's CEF socket-close utility logs `lsof`/`gdb` errors | optional utility; this image does not install `lsof`/`gdb`, normal injection is unaffected |

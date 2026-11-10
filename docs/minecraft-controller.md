@@ -9,7 +9,7 @@ details.
 | Prism instance | `1.21.1` |
 | Minecraft | `1.21.1` |
 | NeoForge | `21.1.265` |
-| Mods directory | `.../PrismLauncher/instances/1.21.1/mods/` |
+| Mods directory | `.../PrismLauncher/instances/1.21.1/minecraft/mods/` |
 | Mod | **Controlify** `3.0.1+lts+1.21.1-neoforge.jar` |
 | Required library | **YACL** `3.8.2+1.21.1-neoforge` (`YetAnotherConfigLib`) |
 | Steam shortcut appid | `<appid>` (see [site.md](site.md)) |
@@ -75,8 +75,8 @@ Use Prism's Modrinth integration:
 Manual installation uses the instance's `mods/` directory:
 
 ```text
-$SH2_DIR/data/home/.local/share/PrismLauncher/instances/1.21.1/mods/
-/home/steamheadless/.local/share/PrismLauncher/instances/1.21.1/mods/   # container path
+$SH2_DIR/data/home/.local/share/PrismLauncher/instances/1.21.1/minecraft/mods/
+/home/steamheadless/.local/share/PrismLauncher/instances/1.21.1/minecraft/mods/   # container path
 ```
 
 Place the two jars there:
@@ -137,7 +137,7 @@ Short Select presses still reach the game.
 Check the installed jars from the host:
 
 ```bash
-MODS="$SH2_DIR/data/home/.local/share/PrismLauncher/instances/1.21.1/mods"
+MODS="$SH2_DIR/data/home/.local/share/PrismLauncher/instances/1.21.1/minecraft/mods"
 ls -l "$MODS"
 sha512sum "$MODS"/*.jar
 ```
@@ -152,8 +152,8 @@ Launch from the Steam library UI, then check:
 Useful logs:
 
 ```text
-instances/1.21.1/logs/latest.log
-instances/1.21.1/logs/neoforge.log
+instances/1.21.1/minecraft/logs/latest.log
+instances/1.21.1/minecraft/logs/debug.log
 ```
 
 If the pad is not detected:

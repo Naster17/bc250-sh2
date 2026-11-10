@@ -3,6 +3,26 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.5.0] - 2026-11-10
+
+### Added
+
+- **Decky Loader `v3.3.1`.** The pinned x86_64 `PluginLoader` is downloaded at
+  build time and checked against its SHA-256, then installed under
+  `/opt/decky-loader` with the upstream GPL-2.0 license.
+  `decky-loader-seed.service` seeds `~/homebrew` and Steam's
+  `.cef-enable-remote-debugging` marker before the session starts;
+  `plugin_loader.service` runs the loader on `127.0.0.1:1337` against CEF
+  `127.0.0.1:8080`. Existing `~/homebrew` installs are preserved so Decky's
+  updater stays authoritative.
+- `docs/decky-loader.md`: QAM access, verification, updating, disabling and
+  troubleshooting. README and operations/troubleshooting pages link to it.
+- `decky-loader.version` OCI label and Decky units in `scripts/health.sh`.
+
+### Changed
+
+- Image version is `1.5.0`.
+
 ## [1.4.14] - 2026-11-10
 
 ### Added
@@ -25,6 +45,22 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   the operations and Steam docs use `${SH2_DIR}`, `<host>` and `<SteamID3>`
   instead of site literals.
 - Image version is `1.4.14`.
+
+### Fixed
+
+- Live host only: the Prism instance's game directory is `minecraft/`, so the
+  game's mods directory is `instances/1.21.1/minecraft/mods/`, not the instance
+  root. Controlify and YACL were moved there; the game was not loading them.
+- The NeoForge early window is disabled (`earlyWindowControl = false` in
+  `instances/1.21.1/minecraft/config/fml.toml`). The client stopped after
+  `Loading ImmediateWindowProvider fmlearlywindow` with no crash report; the
+  optional early window was the failing stage. The game now proceeds to mod
+  loading.
+
+### Documented
+
+- `docs/minecraft-controller.md`: corrected the mods directory, verify command
+  and log paths to the instance's `minecraft/` subdirectory.
 
 ## [1.4.13] - 2026-11-10
 
@@ -65,8 +101,8 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 ### Changed
 
 - Live host only: Controlify `3.0.1+lts` and YACL
-  `3.8.2+1.21.1-neoforge` installed in `instances/1.21.1/mods/`. Mods are user
-  data; the image is unchanged.
+  `3.8.2+1.21.1-neoforge` installed in `instances/1.21.1/minecraft/mods/`.
+  Mods are user data; the image is unchanged.
 
 ## [1.4.10] - 2026-11-10
 

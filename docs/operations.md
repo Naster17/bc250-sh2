@@ -52,7 +52,7 @@ mkdir -p "${SH2_DIR:-/opt/steam-headless}"/{data/home,games,state,journal}
 ```bash
 cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
 cp .env.example .env            # set SH2_DIR, PUID, PGID, TZ
-make build                      # :2 plus :1.4.14; ~40 s on the base image
+make build                      # :2 plus :1.5.0; ~1 min with Decky download
 make up
 docker compose logs -f
 ```
@@ -80,7 +80,7 @@ Update the base image:
 ```bash
 docker pull josh5/steam-headless:2
 docker compose build --no-cache
-docker tag steam-headless-bc250:2 steam-headless-bc250:1.4.14
+docker tag steam-headless-bc250:2 steam-headless-bc250:1.5.0
 make up
 ```
 
@@ -106,6 +106,10 @@ docker exec steam-headless sh -c 'cat /proc/$(pgrep -f "^/usr/bin/gamescope")/cm
 docker exec steam-headless ss -lnt | grep -E '47984|47989|47990|48010'
 curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8483/     # 401 = portal up
 
+docker exec steam-headless systemctl is-active decky-loader-seed plugin_loader
+docker exec steam-headless ss -lnt | grep -E ':(1337|8080)\b'         # Decky + CEF
+docker exec steam-headless curl -s http://127.0.0.1:8080/json/version | jq -r .Browser
+
 docker exec steam-headless bash -lc 'P=$(cat /run/steam-headless/credentials/sunshine-proxy-password);
   curl -sk -u steamheadless:$P https://127.0.0.1:47990/api/apps'
 ```
@@ -124,6 +128,8 @@ steam        -gamepadui -pipewire -pipewire-dmabuf -steamos3 -steampal
 | Port | Protocol | Service |
 |---|---|---|
 | 8483 | TCP + UDP | SHUI: sign-in, WebSocket/WebRTC video |
+| 1337 | TCP | Decky Loader API (`127.0.0.1` only) |
+| 8080 | TCP | Steam CEF remote debugging (`127.0.0.1` only; Decky requirement) |
 | 47984–47990 | TCP | Sunshine web/API (proxied through SHUI) |
 | 47998, 47999, 48000, 48010 | UDP/TCP | Moonlight video / control / audio / RTSP |
 | 27031, 27036 | UDP | Steam Remote Play discovery + media |
@@ -189,6 +195,8 @@ KWin (wayland-0, virtual output 1920x1080@120)   <- Sunshine capture=kwin, SHUI 
 | Steam args per mode (`gaming` → `-gamepadui … -steamos3 -steampal`) | `/usr/local/bin/steam-headless-steam-arguments` |
 | switcher / selector / state | `steam-headless-session-mode`, `steam-headless-select-session`, `/run/steam-headless/session/state.json` |
 | auto-fallback: 4 failures in 60 s → desktop | `steam-headless-gaming-fallback.service` |
+| Decky seed: homebrew + CEF marker before the session | `decky-loader-seed.service`, `/usr/local/bin/decky-loader-seed` |
+| Decky backend: `127.0.0.1:1337` → CEF `127.0.0.1:8080` | `plugin_loader.service` |
 
 ```bash
 docker exec steam-headless steam-headless-session-mode gaming|desktop   # 150 s timeout

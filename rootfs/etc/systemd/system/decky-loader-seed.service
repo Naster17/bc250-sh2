@@ -1,0 +1,12 @@
+[Unit]
+Description=Seed Decky Loader into the Steam Headless home
+After=local-fs.target
+Before=steam-headless-pre-session.target steam-headless-gamescope.service steam-headless-steam.service plugin_loader.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/decky-loader-seed
+
+[Install]
+WantedBy=multi-user.target
