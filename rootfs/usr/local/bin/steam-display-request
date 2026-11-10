@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Sunshine global prep command. Reads the mode requested by the Moonlight
+# client (SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS) and asks the root display daemon to
+# apply it to KWin and gamescope. Runs as the unprivileged desktop user.
+#
+# Protocol: write "<nonce> <width> <height> <refresh>" to
+# /run/steam-headless/display-sync/request and wait for the daemon's
+# "<nonce> ok|error <message>" acknowledgement.
+#
+# Failures are reported on stdout/stderr but never abort the stream: Sunshine
+# treats a non-zero prep command as a launch failure. A mode that cannot be
+# applied still streams, just with Sunshine scaling the current desktop.
+set -euo pipefail
+
+readonly RUN_DIR=/run/steam-headless
+readonly REQUEST_DIR="${RUN_DIR}/display-sync"
+readonly REQUEST_FILE="${REQUEST_DIR}/request"
+readonly ACK_FILE="${REQUEST_DIR}/ack"
+readonly STATE_FILE="${RUN_DIR}/dynamic-display"
+
+enabled=true
+if [[ -r "${STATE_FILE}" ]]; then
+    read -r enabled <"${STATE_FILE}" || enabled=true
+fi
+if [[ "${enabled}" == "disabled" ]]; then
+    exit 0
+fi
+
+width="${SUNSHINE_CLIENT_WIDTH:-}"
+height="${SUNSHINE_CLIENT_HEIGHT:-}"
+refresh="${SUNSHINE_CLIENT_FPS:-}"
+
+if [[ ! "${width}" =~ ^[0-9]{3,4}$ ]] ||
+    [[ ! "${height}" =~ ^[0-9]{3,4}$ ]] ||
+    [[ ! "${refresh}" =~ ^[0-9]{1,3}([.][0-9]{1,3})?$ ]]; then
+    echo "steam-display-request: missing or invalid SUNSHINE_CLIENT_* (${width}x${height}@${refresh})" >&2
+    exit 0
+fi
+
+if [[ ! -d "${REQUEST_DIR}" || ! -w "${REQUEST_DIR}" ]]; then
+    echo "steam-display-request: ${REQUEST_DIR} is not writable; is steam-display-syncd running?" >&2
+    exit 0
+fi
+
+daemon_pid=""
+[[ -s "${REQUEST_DIR}/pid" ]] && read -r daemon_pid <"${REQUEST_DIR}/pid" || true
+if [[ -z "${daemon_pid}" || ! -d "/proc/${daemon_pid}" ]]; then
+    echo "steam-display-request: steam-display-syncd is not running" >&2
+    exit 0
+fi
+
+nonce="$$-$(date +%s%N)"
+temporary="$(mktemp "${REQUEST_DIR}/request.XXXXXX")"
+trap 'rm -f "${temporary}"' EXIT
+printf '%s %s %s %s\n' "${nonce}" "${width}" "${height}" "${refresh}" >"${temporary}"
+mv -f "${temporary}" "${REQUEST_FILE}"
+
+# The daemon stops Steam and relaunches gamescope when the mode changes, so
+# allow generous headroom while still bounding a dead daemon.
+for _ in {1..600}; do
+    if [[ -r "${ACK_FILE}" ]]; then
+        ack_nonce="" status="" message=""
+        read -r ack_nonce status message <"${ACK_FILE}" || true
+        if [[ "${ack_nonce}" == "${nonce}" ]]; then
+            printf 'steam-display-request: %s %s\n' "${status}" "${message}"
+            exit 0
+        fi
+    fi
+    sleep 0.1
+done
+
+echo "steam-display-request: timed out waiting for ${width}x${height}@${refresh}" >&2
+exit 0

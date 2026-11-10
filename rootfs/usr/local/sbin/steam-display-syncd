@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# Apply a Moonlight client's requested output mode to the KWin virtual output
+# and, when Gaming Mode is active, relaunch gamescope so the game renders at
+# that same resolution and refresh rate instead of being scaled by Sunshine.
+#
+# This daemon runs as root because two privileged operations are required:
+#   * kscreen-doctor must run as the desktop user against the live Wayland
+#     session (runuser);
+#   * steam-headless-gamescope.service and steam-headless-steam.service are
+#     system units.
+#
+# The unprivileged half is /usr/local/bin/steam-display-request, which Sunshine
+# runs as its global prep command. Requests and acknowledgements travel through
+# files in /run/steam-headless/display-sync; see that script for the protocol.
+set -euo pipefail
+
+readonly RUN_DIR=/run/steam-headless
+readonly REQUEST_DIR="${RUN_DIR}/display-sync"
+readonly REQUEST_FILE="${REQUEST_DIR}/request"
+readonly ACK_FILE="${REQUEST_DIR}/ack"
+readonly PID_FILE="${REQUEST_DIR}/pid"
+readonly LOCK_FILE="${RUN_DIR}/session/switch.lock"
+readonly SESSION_ENV="${RUN_DIR}/session-environment"
+readonly MODE_HELPER=/usr/local/sbin/steam-headless-set-display-mode
+readonly GAMESCOPE_SERVICE=steam-headless-gamescope.service
+readonly STEAM_SERVICE=steam-headless-steam.service
+
+log() {
+    printf '%s steam-display-syncd: %s\n' "$(date -Is)" "$*"
+}
+
+ack() {
+    local nonce="$1" status="$2"
+    shift 2
+    printf '%s %s %s\n' "${nonce}" "${status}" "$*" >"${ACK_FILE}.tmp"
+    mv -f "${ACK_FILE}.tmp" "${ACK_FILE}"
+}
+
+# Keep the same bounds as the image's steam-headless-set-display-mode helper.
+valid_mode() {
+    local width="$1" height="$2" refresh="$3"
+
+    [[ "${width}" =~ ^[0-9]{3,4}$ ]] || return 1
+    [[ "${height}" =~ ^[0-9]{3,4}$ ]] || return 1
+    ((10#${width} >= 320 && 10#${width} <= 7680)) || return 1
+    ((10#${height} >= 200 && 10#${height} <= 4320)) || return 1
+    [[ "${refresh}" =~ ^[0-9]{1,3}([.][0-9]{1,3})?$ ]] || return 1
+    awk -v value="${refresh}" 'BEGIN { exit !(value >= 24 && value <= 240) }'
+}
+
+load_session_env() {
+    [[ -r "${SESSION_ENV}" ]] || return 1
+    set -a
+    # shellcheck disable=SC1090
+    . "${SESSION_ENV}"
+    set +a
+    [[ -n "${XDG_RUNTIME_DIR:-}" && -n "${WAYLAND_DISPLAY:-}" ]]
+}
+
+apply_kwin_mode() {
+    local width="$1" height="$2" refresh="$3"
+
+    load_session_env || {
+        log "session environment is not readable yet"
+        return 1
+    }
+
+    # The helper adds a custom KWin mode when the exact mode is not listed and
+    # selects it, then verifies kscreen-doctor applied it.
+    runuser -u steamheadless -- /usr/bin/env \
+        HOME=/home/steamheadless \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin \
+        XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        WAYLAND_DISPLAY="${WAYLAND_DISPLAY}" \
+        DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+        QT_QPA_PLATFORM=wayland \
+        "${MODE_HELPER}" "${width}" "${height}" "${refresh}"
+}
+
+gaming_active() {
+    systemctl --quiet is-active steam-headless-gaming.target
+}
+
+# The KWin output mode alone is not enough in Gaming Mode: gamescope is a
+# fullscreen nested compositor whose output size and refresh are fixed at
+# launch. Compare its argv so a reconnect with the same mode does not restart
+# Steam and kill a running game.
+gamescope_matches() {
+    local width="$1" height="$2" refresh="$3"
+    local pid out_width= out_height= out_refresh= i
+    local -a argv=()
+
+    pid="$(pgrep -x gamescope-wl | head -n 1 || true)"
+    [[ -n "${pid}" ]] || return 1
+
+    mapfile -d '' -t argv <"/proc/${pid}/cmdline" || return 1
+    for ((i = 0; i + 1 < ${#argv[@]}; i++)); do
+        case "${argv[i]}" in
+        --output-width) out_width="${argv[i + 1]}" ;;
+        --output-height) out_height="${argv[i + 1]}" ;;
+        --nested-refresh) out_refresh="${argv[i + 1]}" ;;
+        esac
+    done
+
+    [[ "${out_width}" == "${width}" && "${out_height}" == "${height}" ]] || return 1
+    awk -v actual="${out_refresh}" -v wanted="${refresh}" '
+        BEGIN {
+            delta = actual - wanted
+            if (delta < 0) {
+                delta = -delta
+            }
+            exit !(delta < 0.01)
+        }'
+}
+
+restart_gaming() {
+    local width="$1" height="$2" refresh="$3"
+
+    log "relaunching gamescope/Steam for ${width}x${height}@${refresh}"
+
+    # Steam must go first: it holds the old gamescope Wayland/Xwayland sockets
+    # and would otherwise restart itself against a dead compositor.
+    systemctl stop "${STEAM_SERVICE}" || log "warning: could not stop ${STEAM_SERVICE}"
+
+    # Intentional restarts count towards StartLimitBurst; clear the counter so
+    # several mode changes in one minute do not disable the unit.
+    systemctl reset-failed "${GAMESCOPE_SERVICE}" 2>/dev/null || true
+
+    if ! systemctl restart "${GAMESCOPE_SERVICE}"; then
+        log "error: ${GAMESCOPE_SERVICE} failed to restart"
+        systemctl start "${STEAM_SERVICE}" 2>/dev/null || true
+        return 1
+    fi
+
+    systemctl reset-failed "${STEAM_SERVICE}" 2>/dev/null || true
+    if ! systemctl start "${STEAM_SERVICE}"; then
+        log "error: ${STEAM_SERVICE} failed to start"
+        return 1
+    fi
+}
+
+process_request() {
+    local nonce="$1" width="$2" height="$3" refresh="$4"
+    local started="${SECONDS}"
+
+    if ! valid_mode "${width}" "${height}" "${refresh}"; then
+        ack "${nonce}" error "invalid mode ${width}x${height}@${refresh}"
+        return 0
+    fi
+
+    if ! apply_kwin_mode "${width}" "${height}" "${refresh}"; then
+        ack "${nonce}" error "KWin did not accept ${width}x${height}@${refresh}"
+        return 0
+    fi
+
+    if gaming_active && ! gamescope_matches "${width}" "${height}" "${refresh}"; then
+        if ! restart_gaming "${width}" "${height}" "${refresh}"; then
+            ack "${nonce}" error "gamescope restart failed for ${width}x${height}@${refresh}"
+            return 0
+        fi
+    fi
+
+    ack "${nonce}" ok "${width}x${height}@${refresh}"
+    log "applied ${width}x${height}@${refresh} in $((SECONDS - started))s"
+}
+
+main() {
+    install -d -m 0755 "${RUN_DIR}"
+    install -d -m 0777 "${REQUEST_DIR}"
+    # Requests are written with mv(1), so anything matching this pattern is an
+    # orphan from a writer that died before the rename.
+    rm -f "${REQUEST_DIR}"/request.* 2>/dev/null || true
+    printf '%s\n' "$$" >"${PID_FILE}"
+    trap 'rm -f "${PID_FILE}"' EXIT
+
+    exec 9>"${LOCK_FILE}"
+
+    log "started; waiting for display requests"
+    while true; do
+        if [[ -s "${REQUEST_FILE}" ]]; then
+            local nonce="" width="" height="" refresh=""
+            read -r nonce width height refresh <"${REQUEST_FILE}" || true
+            rm -f "${REQUEST_FILE}"
+
+            if [[ -z "${nonce}" || -z "${width}" || -z "${height}" || -z "${refresh}" ]]; then
+                log "ignoring malformed request in ${REQUEST_FILE}"
+                sleep 0.2
+                continue
+            fi
+
+            # The session switcher holds the same lock while changing desktop
+            # and gaming targets. Serialise instead of fighting it.
+            if flock -w 30 9; then
+                process_request "${nonce}" "${width}" "${height}" "${refresh}"
+                flock -u 9
+            else
+                ack "${nonce}" error "session switch is busy"
+                log "session switch is busy; rejected ${width}x${height}@${refresh}"
+            fi
+        fi
+        sleep 0.2
+    done
+}
+
+main "$@"

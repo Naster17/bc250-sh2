@@ -49,6 +49,24 @@ if [ "$mode" = "active" ]; then
 	esac
 fi
 
+printf '\n== dynamic display ==\n'
+daemon=$(docker exec "$CONTAINER" systemctl is-active steam-display-syncd 2>/dev/null || true)
+daemon=${daemon:-unknown}
+if [ "$daemon" = "active" ]; then ok "steam-display-syncd" "$daemon"; else bad "steam-display-syncd" "$daemon"; fi
+enabled=$(docker exec "$CONTAINER" cat /run/steam-headless/dynamic-display 2>/dev/null || true)
+enabled=${enabled:-unknown}
+case "$enabled" in
+enabled)
+	if docker exec "$CONTAINER" grep -q 'steam-display-request' /home/steamheadless/.config/sunshine/sunshine.conf 2>/dev/null; then
+		ok "client display modes" enabled
+	else
+		bad "client display modes" "prep command missing"
+	fi
+	;;
+disabled) ok "client display modes" disabled ;;
+*) bad "client display modes" "state unreadable" ;;
+esac
+
 printf '\n== health ==\n'
 summary=$(docker exec "$CONTAINER" /usr/local/bin/steam-headless-healthcheck 2>/dev/null | tail -n1)
 case "$summary" in

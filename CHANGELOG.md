@@ -3,6 +3,58 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.5.0] - 2026-11-10
+
+### Added
+
+- **Dynamic per-client display mode.** Sunshine's managed `global_prep_cmd`
+  runs `steam-display-request`, which passes `SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS`
+  to the root `steam-display-syncd` daemon. The daemon applies the mode to the
+  KWin virtual output with the image's `steam-headless-set-display-mode` helper
+  and, in gaming mode, relaunches gamescope and Steam with the same output size
+  and refresh. Moonlight's 720p60, 1080p90 or 1280x800 request now changes what
+  the game renders, not just what Sunshine scales.
+- `steam-display-syncd.service`, enabled at boot. Requests and acknowledgements
+  use `/run/steam-headless/display-sync` and are serialised with the existing
+  session switcher on `/run/steam-headless/session/switch.lock`.
+- `30-manage-sunshine-display-prep.sh` keeps exactly one managed prep entry on
+  every boot, preserves user-added entries, and removes the managed entry when
+  `STEAM_HEADLESS_DYNAMIC_DISPLAY=false`.
+- README section covering the Moonlight workflow, the request sequence, restart
+  behaviour, mode persistence, limits, and logs.
+
+### Changed
+
+- The seeded `~/.config/sunshine/sunshine.conf` now carries the managed
+  `global_prep_cmd`. Upstream `SUNSHINE_ENABLE_AUTO_CONFIG` and
+  `SUNSHINE_ENABLE_AUTO_DISPLAY_MODE` remain `false`, so the software encoder
+  and the two stream-only tiles are still owned by this image.
+
+### Notes
+
+- A mode change restarts Steam and gamescope, closing a game that is already
+  running. Reconnecting with the same mode does not restart anything.
+- The prep command is fail-soft: if the daemon cannot apply a mode, the stream
+  still starts and Sunshine scales the previous mode; the daemon journal records
+  the failure.
+
+## [1.4.10] - 2026-11-10
+
+### Documented
+
+- `docs/steam-shortcuts.md`: binary `shortcuts.vdf` layout, appid calculation,
+  quoted `Exe`, the single-shortcut writer, Steam UI vs scripted creation,
+  verification, pitfalls, and rollback.
+
+## [1.4.9] - 2026-11-10
+
+### Documented
+
+- `docs/prism-launcher.md`: replacing Prism Launcher 11.x with 9.4, the offline
+  `accounts.json` format (native and Flatpak), the canonical Steam non-Steam
+  shortcut (binary VDF, CRC appid, quoted `Exe`), and the `steam -applaunch`
+  limitation.
+
 ## [1.4.8] - 2026-11-08
 
 ### Changed

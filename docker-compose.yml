@@ -43,10 +43,16 @@ services:
       # Boot straight into gamescope + Steam gamepad UI (SteamOS-like).
       # Runtime switch: docker exec steam-headless steam-headless-session-mode desktop
       STEAM_HEADLESS_SESSION_MODE: 'gaming'
+      # Moonlight-driven display modes: Sunshine's prep command asks a root
+      # daemon to apply the client's resolution/refresh to KWin and to relaunch
+      # gamescope at the same mode. Set false in .env to disable.
+      STEAM_HEADLESS_DYNAMIC_DISPLAY: '${STEAM_HEADLESS_DYNAMIC_DISPLAY:-true}'
       # No VAAPI on GFX1013 -> SHUI must be told explicitly.
       SHUI_ENCODER: 'software'
       # We own ~/.config/sunshine via the baked defaults (see Dockerfile);
       # auto-config would pin "encoder = vaapi" and re-add the display-mode prep.
+      # Our own prep command (managed by 30-manage-sunshine-display-prep.sh) is
+      # independent of these two switches.
       SUNSHINE_ENABLE_AUTO_CONFIG: 'false'
       SUNSHINE_ENABLE_AUTO_DISPLAY_MODE: 'false'
 
