@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        IMAGE_VERSION: ${IMAGE_VERSION:-1.4.13}
+        IMAGE_VERSION: ${IMAGE_VERSION:-1.4.14}
         GIT_REVISION: ${GIT_REVISION:-unknown}
     image: steam-headless-bc250:2
     container_name: steam-headless

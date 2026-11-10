@@ -6,6 +6,7 @@ details:
 | Page | Contents |
 |---|---|
 | [operations.md](operations.md) | Host requirements, deploy/update, verification, ports, session modes, Sunshine config, daily operations, backup, cold boot |
+| [site.md](site.md) | This deployment's host, paths, portal URL, timezone, SteamID |
 | [controller.md](controller.md) | Steam controller layouts: 500 ms Select long-press → Quick Access Menu |
 | [metrics.md](metrics.md) | BC-250 GPU utilisation and clock publication for MangoHud |
 | [troubleshooting.md](troubleshooting.md) | Symptom → cause/fix table |

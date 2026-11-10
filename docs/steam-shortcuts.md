@@ -10,12 +10,12 @@ In this deployment the Steam home is the container home, which is the host
 directory `$SH2_DIR/data/home` mounted at `/home/steamheadless`:
 
 ```text
-$SH2_DIR/data/home/.local/share/Steam/userdata/950207934/config/shortcuts.vdf
+$SH2_DIR/data/home/.local/share/Steam/userdata/<SteamID3>/config/shortcuts.vdf
 ```
 
-The `950207934` directory is the SteamID3 of the only Steam account in this
-deployment. On another account, use the directory that contains
-`config/shortcuts.vdf`.
+The `<SteamID3>` directory is the SteamID3 of the only Steam account in this
+deployment (this site's value is in [site.md](site.md)). On another account, use
+the directory that contains `config/shortcuts.vdf`.
 
 There are two correct ways to add a shortcut:
 

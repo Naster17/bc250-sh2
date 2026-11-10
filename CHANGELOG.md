@@ -3,6 +3,23 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.4.14] - 2026-11-10
+
+### Added
+
+- `make deploy`: pushes HEAD, then runs `git pull --ff-only && make build &&
+  make up` on the host. `DEPLOY_HOST`/`DEPLOY_DIR` come from `.env` or the
+  command line.
+- `docs/site.md`: this deployment's host, paths, portal URL, timezone and
+  SteamID.
+
+### Changed
+
+- `.env.example` now uses generic `SH2_DIR=/opt/steam-headless` and `TZ=UTC`;
+  the operations and Steam docs use `${SH2_DIR}`, `<host>` and `<SteamID3>`
+  instead of site literals.
+- Image version is `1.4.14`.
+
 ## [1.4.13] - 2026-11-10
 
 ### Added
@@ -35,8 +52,9 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 ### Documented
 
 - `docs/minecraft-controller.md`: Controlify + YACL in the NeoForge 1.21.1
-  instance, the Steam Input Gamepad requirement, the Select long-press
-  interaction, verification, and the version matrix/fallback.
+  instance, the per-shortcut Steam Input layout (Gamepad vs keyboard/mouse and
+  where to change it), the Select long-press interaction, verification, and the
+  version matrix/fallback.
 
 ### Changed
 

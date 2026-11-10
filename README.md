@@ -68,13 +68,26 @@ cd steam-headless-bc250
 
 cp .env.example .env          # set SH2_DIR / PUID / PGID / TZ
 make dirs                     # host dirs + metric seed files compose mounts
-make build                    # :2 plus the :1.4.13 rollback tag
+make build                    # :2 plus the :1.4.14 rollback tag
 make up                       # start the container
 docker compose logs -f        # first boot prints the SHUI bootstrap password
 ```
 
 Open `https://<host>:8483`, sign in as `steamheadless` with the temporary
 password, set the permanent one, then connect a Moonlight client and pick a tile.
+
+### Deploy from a workstation
+
+`make deploy` pushes the current HEAD and runs `git pull --ff-only && make build
+&& make up` on the host. Set `DEPLOY_HOST` and `DEPLOY_DIR` in `.env`, or pass
+them on the command line:
+
+```bash
+make deploy DEPLOY_HOST=user@host DEPLOY_DIR=~/steam-headless-bc250
+```
+
+The working tree must be clean, and the host checkout must be on the same branch
+and have push access.
 
 ## Verify
 
@@ -155,7 +168,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.4.13` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.4.14` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
@@ -263,6 +276,7 @@ LICENSE                   # MIT for this layer; upstream projects keep theirs
 scripts/health.sh         # read-only readiness check (make verify)
 scripts/prepare-host.sh   # host directories and metric seeds (make dirs)
 docs/README.md            # documentation index
+docs/site.md              # this deployment's host, paths, SteamID
 docs/operations.md        # deploy, host layout, ports, session modes, daily ops, backup
 docs/controller.md        # Select long-press → Quick Access Menu
 docs/metrics.md           # BC-250 GPU/CPU telemetry
@@ -293,7 +307,8 @@ rootfs/
 The [docs index](docs/README.md) lists the topic pages. The
 [operations manual](docs/operations.md) covers deploy, host layout, ports,
 session modes, daily operations and recovery; controller, metrics and
-troubleshooting have their own pages.
+troubleshooting have their own pages. This deployment's host, paths and SteamID
+are in [docs/site.md](docs/site.md).
 
 ## License / credits
 

@@ -10,18 +10,20 @@ The commands are written for the host. The container home is the host directory
 `$SH2_DIR/data/home` mounted at `/home/steamheadless`, so both users see the same
 files.
 
-| Item | Live value |
+| Item | Value |
 |---|---|
 | Container user / host uid | `steamheadless` / `1000` |
 | Container home | `/home/steamheadless` |
-| Host data root (`SH2_DIR`) | `~/sh2` |
+| Host data root (`SH2_DIR`) | `${SH2_DIR}` |
 | Prism AppImage | `Applications/prism-launcher.AppImage` |
-| Steam userdata | `950207934` (the directory with `config/shortcuts.vdf`) |
-| Steam shortcut appid | `3102825927` |
-| Offline nickname / UUID | `nik` / `0749cb21fe1d3cd78fe4babbe5fee5fe` |
+| Steam userdata | `<SteamID3>` (see [site.md](site.md)) |
+| Steam shortcut appid | `<appid>` (see [site.md](site.md)) |
+| Offline nickname / UUID | `<nickname>` / `<uuid>` (see [site.md](site.md)) |
 
-`$SH2_DIR` is `~/sh2` in this deployment. Everything below stays inside that
-data root; recreating the container does not remove it.
+`$SH2_DIR` is the host data root; this deployment's value is in
+[site.md](site.md). Everything below stays inside that data root; recreating the
+container does not remove it. The literals in the commands below are this
+deployment's values; site.md is authoritative.
 
 ## 1. Replace the AppImage with 9.4
 

@@ -1,12 +1,15 @@
 SHELL := /bin/sh
 COMPOSE ?= docker compose
 CONTAINER ?= steam-headless
-IMAGE_VERSION ?= 1.4.13
+IMAGE_VERSION ?= 1.4.14
 GIT_REVISION ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DEPLOY_HOST ?= $(shell grep -m1 '^DEPLOY_HOST=' .env 2>/dev/null | cut -d= -f2)
+DEPLOY_DIR ?= $(shell grep -m1 '^DEPLOY_DIR=' .env 2>/dev/null | cut -d= -f2)
+DEPLOY_DIR := $(if $(DEPLOY_DIR),$(DEPLOY_DIR),~/steam-headless-bc250)
 SH2_DIR ?= $(shell grep -m1 '^SH2_DIR=' .env 2>/dev/null | cut -d= -f2)
 
 .DEFAULT_GOAL := help
-.PHONY: help env dirs up build down restart ps logs health verify shell mode-gaming mode-desktop \
+.PHONY: help env dirs up build deploy down restart ps logs health verify shell mode-gaming mode-desktop \
         reset-sunshine reset-auth backup
 
 help: ## Show available targets
@@ -21,6 +24,12 @@ dirs: env ## Create host directories and the metric seed files compose mounts
 build: env ## Build the image and tag it with IMAGE_VERSION
 	IMAGE_VERSION="$(IMAGE_VERSION)" GIT_REVISION="$(GIT_REVISION)" $(COMPOSE) build
 	docker tag steam-headless-bc250:2 steam-headless-bc250:$(IMAGE_VERSION)
+
+deploy: ## Push HEAD and rebuild on the host (DEPLOY_HOST/DEPLOY_DIR)
+	@test -n "$(DEPLOY_HOST)" || { echo "set DEPLOY_HOST in .env or pass DEPLOY_HOST=user@host"; exit 1; }
+	@test -z "$$(git status --porcelain)" || { echo "commit or stash changes before deploy"; exit 1; }
+	git push origin HEAD
+	ssh "$(DEPLOY_HOST)" "cd $(DEPLOY_DIR) && git pull --ff-only && make build && make up"
 
 up: dirs ## Start, or apply compose changes to, the container
 	$(COMPOSE) up -d

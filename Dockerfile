@@ -21,7 +21,7 @@ FROM josh5/steam-headless:2@sha256:c60f4d7243a4d94515f722441fff90b752413bf6a45bb
 
 USER root
 
-ARG IMAGE_VERSION=1.4.13
+ARG IMAGE_VERSION=1.4.14
 ARG GIT_REVISION=unknown
 
 LABEL org.opencontainers.image.title="Steam Headless BC-250" \

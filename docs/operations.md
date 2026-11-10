@@ -1,18 +1,16 @@
 # Operations manual — `steam-headless-bc250`
 
-Deployment-specific notes for the BC-250 host (`nik@192.168.1.105`, hostname
-`bc500`). The image is built from this repository; the upstream
-`josh5/steam-headless:2` filesystem is untouched apart from the files listed in
-the top-level README.
+Deployment notes for the BC-250 host. This deployment's host, paths, portal URL,
+timezone and SteamID are recorded in [site.md](site.md). The image is built from
+this repository; the upstream `josh5/steam-headless:2` filesystem is untouched
+apart from the files listed in the top-level README.
 
 | Item | Value |
 |---|---|
 | Image | `steam-headless-bc250:2` (built here from `josh5/steam-headless:2`) |
-| Repo checkout on the host | `~/steam-headless-bc250` |
-| Data root (`SH2_DIR`) | `~/sh2` |
+| Data root | `${SH2_DIR}` |
 | Container / hostname | `steam-headless` / `steam-headless` |
 | Network | `host` |
-| SHUI | `https://192.168.1.105:8483` |
 | Session mode | `gaming` (gamescope + Steam gamepad UI) |
 | Encoder | software (`libx264` / `openh264`) |
 
@@ -31,33 +29,38 @@ lsmod | grep -E '^(uhid|uinput)'                                # uhid, uinput l
 ```
 
 GPU: single AMD APU `1002:13fe` (Cyan Skillfish / BC-250), RADV `GFX1013`, one
-render node, no monitor attached. Docker user `nik` is in the `docker` group, so
+render node, no monitor attached. The host user is in the `docker` group, so
 no root is needed anywhere below.
 
 
 ## 2. Directory layout on the host
 
 ```bash
-mkdir -p ~/sh2/{data/home,games,state,journal}
+mkdir -p "${SH2_DIR:-/opt/steam-headless}"/{data/home,games,state,journal}
 ```
 
 | Host path | Container path | Purpose |
 |---|---|---|
-| `~/sh2/data/home` | `/home/steamheadless` | Steam, Proton prefixes, saves, Flatpaks, Sunshine config/pairings |
-| `~/sh2/state` | `/var/lib/steam-headless` | auth state, TLS certificates, installation marker |
-| `~/sh2/journal` | `/var/log/journal` | persistent systemd journal |
-| `~/sh2/games` | `/mnt/games` | game library (`GameLibrary/Steam` created on first boot) |
+| `${SH2_DIR}/data/home` | `/home/steamheadless` | Steam, Proton prefixes, saves, Flatpaks, Sunshine config/pairings |
+| `${SH2_DIR}/state` | `/var/lib/steam-headless` | auth state, TLS certificates, installation marker |
+| `${SH2_DIR}/journal` | `/var/log/journal` | persistent systemd journal |
+| `${SH2_DIR}/games` | `/mnt/games` | game library (`GameLibrary/Steam` created on first boot) |
 
 
 ## 3. Deploy / update
 
 ```bash
-cd ~/steam-headless-bc250
-cp .env.example .env            # SH2_DIR=/home/nik/sh2, PUID/PGID=1000, TZ
-make build                      # :2 plus :1.4.13; ~40 s on the base image
+cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
+cp .env.example .env            # set SH2_DIR, PUID, PGID, TZ
+make build                      # :2 plus :1.4.14; ~40 s on the base image
 make up
 docker compose logs -f
 ```
+
+From a workstation with push access, `make deploy` pushes HEAD and runs
+`git pull --ff-only && make build && make up` on the host. Set `DEPLOY_HOST` and
+`DEPLOY_DIR` in `.env`, or pass them to make. The working tree must be clean and
+the host checkout must be on the same branch.
 
 First boot prints the SHUI bootstrap password:
 
@@ -66,17 +69,18 @@ First boot prints the SHUI bootstrap password:
  Temporary password: <temporary-password>
 ```
 
-Open `https://192.168.1.105:8483`, accept the self-signed certificate, sign in,
-complete the setup form (temporary password + new permanent password ≥ 12 chars,
-no `:`), which also sets the Linux desktop and Sunshine password. Never run
-`passwd` inside the container — it desyncs web/desktop/Sunshine.
+Open `https://<host>:8483` (this deployment: [site.md](site.md)), accept the
+self-signed certificate, sign in, complete the setup form (temporary password +
+new permanent password ≥ 12 chars, no `:`), which also sets the Linux desktop
+and Sunshine password. Never run `passwd` inside the container — it desyncs
+web/desktop/Sunshine.
 
 Update the base image:
 
 ```bash
 docker pull josh5/steam-headless:2
 docker compose build --no-cache
-docker tag steam-headless-bc250:2 steam-headless-bc250:1.4.13
+docker tag steam-headless-bc250:2 steam-headless-bc250:1.4.14
 make up
 ```
 
@@ -310,7 +314,7 @@ SHUI lands on KWin (invisible under the fullscreen gamescope), so:
 ## 13. Daily operations
 
 ```bash
-cd ~/steam-headless-bc250
+cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
 docker compose up -d                 # start / apply compose changes
 docker compose restart
 docker compose stop
@@ -326,9 +330,9 @@ docker exec steam-headless journalctl -u steam-headless-sunshine -n 50 --no-page
 ## 14. Backup / restore
 
 ```bash
-cd ~/sh2
+cd "${SH2_DIR:-/opt/steam-headless}"
 docker compose stop 2>/dev/null || docker stop steam-headless
-tar -czf ~/sh2-backup-$(date +%F).tar.gz data/home state journal
+tar -czf "${SH2_DIR:-/opt/steam-headless}-backup-$(date +%F).tar.gz" data/home state journal
 docker start steam-headless
 ```
 

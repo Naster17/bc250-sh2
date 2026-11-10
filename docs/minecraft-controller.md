@@ -4,7 +4,7 @@ This is the controller setup used by the live `1.21.1` Prism instance. It covers
 the recommended mod, the Steam Input layout, and the container-specific input
 details.
 
-| Item | Live value |
+| Item | Value |
 |---|---|
 | Prism instance | `1.21.1` |
 | Minecraft | `1.21.1` |
@@ -12,8 +12,8 @@ details.
 | Mods directory | `.../PrismLauncher/instances/1.21.1/mods/` |
 | Mod | **Controlify** `3.0.1+lts+1.21.1-neoforge.jar` |
 | Required library | **YACL** `3.8.2+1.21.1-neoforge` (`YetAnotherConfigLib`) |
-| Steam shortcut appid | `3102825927` |
-| Steam userdata | `950207934` |
+| Steam shortcut appid | `<appid>` (see [site.md](site.md)) |
+| Steam userdata | `<SteamID3>` (see [site.md](site.md)) |
 | Fallback mod | MidnightControls `1.10.0.1-neoforge` |
 
 ## Why Controlify
@@ -91,16 +91,38 @@ the image.
 
 ## Steam Input setup
 
-The important setting is the **Prism shortcut's controller layout**:
+The Prism shortcut has its own Steam Input controller layout. Steam applies it
+to the shortcut and its child processes (Prism and Minecraft). This is separate
+from the mod: Controlify can only use a gamepad if Steam exposes one.
 
-- Set it to **Gamepad**, not “Keyboard (WASD) and Mouse.” A keyboard/mouse
-  layout stops exposing a gamepad to Minecraft, so Controlify cannot see the
-  controller.
-- Use the **mouse** for the Prism UI. In this deployment it comes from Moonlight
-  and the gamescope cursor fix; it is independent of the controller layout.
-- Leave the controller available to the game. The Steam gamepad UI still uses
-  the controller while it is focused; when Minecraft launches, the shortcut's
-  gamepad layout applies to the child process.
+### Gamepad vs keyboard/mouse
+
+| Layout | What Steam sends to the app | Result |
+|---|---|---|
+| **Keyboard (WASD) and Mouse** | Controller translated into keyboard/mouse events | Controlify sees no gamepad; the controller does nothing in Minecraft |
+| **Gamepad** | Virtual Xbox pad | Controlify sees the pad and handles Minecraft |
+
+Use **Gamepad**. The mouse for the Prism UI is Moonlight's mouse and is
+independent of this layout; choosing Gamepad does not remove it. A trackpad
+template is not needed on a standard Xbox-style controller.
+
+### Set the layout
+
+1. Open the Steam library and select the Prism shortcut (appid
+   `3102825927`). Do not launch it.
+2. Open the shortcut's controller settings:
+   - gamepad UI: the **controller icon** on the game page, or the
+     **Manage/gear** menu → **Controller**;
+   - desktop UI: the **controller icon** on the game page, or right-click the
+     shortcut → **Manage** → **Controller Layout**.
+3. Open **Controller Layout → Browse Configs → Templates**.
+4. Select **Gamepad** and apply it.
+
+The setting is per-shortcut, stored in Steam's user data, and persists across
+launches and container recreation. The UI shows the active layout; if it is not
+Gamepad, change it. The shortcut's **Allow Desktop Configuration in Launcher**
+option is not the game layout; it only controls the desktop layout while the
+launcher is focused.
 
 The startup shortcut is launched from the **Steam library UI**. On this client,
 `steam -applaunch 3102825927` returns `AppError_9` for non-Steam shortcuts even
@@ -122,6 +144,7 @@ sha512sum "$MODS"/*.jar
 
 Launch from the Steam library UI, then check:
 
+- the Prism shortcut's Steam Input layout is **Gamepad**;
 - the NeoForge log shows Controlify loaded;
 - Controlify's settings screen detects a controller;
 - the controller works in-game and in the Controlify menus.
