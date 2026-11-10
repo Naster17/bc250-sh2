@@ -31,7 +31,7 @@ ARG GIT_REVISION=unknown
 ARG DECKY_LOADER_VERSION=v3.3.1
 ARG DECKY_LOADER_SHA256=7bb73b0502c49e7194f34f9ce4ddb6777764e9277d7a5e54665f66460d50c315
 # Override to a local mirror when GitHub is slow; the checksum still applies.
-ARG DECKY_LOADER_URL=https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${DECKY_LOADER_VERSION}/PluginLoader
+ARG DECKY_LOADER_URL=
 
 LABEL org.opencontainers.image.title="Steam Headless BC-250" \
       org.opencontainers.image.description="Thin Steam Headless 2 layer for the AMD BC-250 (Cyan Skillfish / RADV GFX1013)" \
@@ -49,9 +49,10 @@ COPY rootfs/ /
 # boot. The release asset is architecture-specific; this deployment is x86_64.
 RUN set -eux; \
     install -d -m 0755 /opt/decky-loader; \
+    url="${DECKY_LOADER_URL:-https://github.com/SteamDeckHomebrew/decky-loader/releases/download/${DECKY_LOADER_VERSION}/PluginLoader}"; \
     curl --fail --location --ipv4 --retry 3 --retry-delay 2 \
         --connect-timeout 20 --max-time 1800 \
-        "${DECKY_LOADER_URL}" --output /opt/decky-loader/PluginLoader; \
+        "${url}" --output /opt/decky-loader/PluginLoader; \
     echo "${DECKY_LOADER_SHA256}  /opt/decky-loader/PluginLoader" | sha256sum -c -; \
     chmod 0755 /opt/decky-loader/PluginLoader; \
     printf '%s\n' "${DECKY_LOADER_VERSION}" >/opt/decky-loader/VERSION; \

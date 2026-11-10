@@ -21,6 +21,8 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 - Image version is `1.6.0`.
 - `bc250-fan-curve` in the host `bc250fc` repo is now the single writer of
   CPU_FAN1; the CLI and Decky plugin no longer stop or race the daemon.
+- Decky's `PluginLoader` download now uses IPv4, has a bounded timeout, and
+  accepts `DECKY_LOADER_URL` for a local mirror; the SHA-256 pin is unchanged.
 
 ### Fixed
 
