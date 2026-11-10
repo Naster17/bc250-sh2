@@ -348,3 +348,9 @@ cp -p "$CONFIG/shortcuts.vdf.bak" "$CONFIG/shortcuts.vdf"
 
 The live shortcut is the original 449-byte file with `icon=prism-launcher`.
 Keep a copy as `shortcuts.vdf.bak` before editing.
+
+## Related
+
+- [Minecraft controller support](minecraft-controller.md)
+- [Steam non-Steam shortcuts](steam-shortcuts.md)
+- [Operations manual](operations.md)

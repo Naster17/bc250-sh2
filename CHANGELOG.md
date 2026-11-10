@@ -3,7 +3,33 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
-## [1.5.0] - 2026-11-10
+## [1.4.12] - 2026-11-10
+
+### Documented
+
+- Split the operations manual into topic pages for controller, metrics and
+  troubleshooting; added `docs/README.md` and a README table of contents.
+
+### Changed
+
+- Host directory preparation moved from the Makefile to
+  `scripts/prepare-host.sh`; the unused `IMAGE` variable was removed.
+
+## [1.4.11] - 2026-11-10
+
+### Documented
+
+- `docs/minecraft-controller.md`: Controlify + YACL in the NeoForge 1.21.1
+  instance, the Steam Input Gamepad requirement, the Select long-press
+  interaction, verification, and the version matrix/fallback.
+
+### Changed
+
+- Live host only: Controlify `3.0.1+lts` and YACL
+  `3.8.2+1.21.1-neoforge` installed in `instances/1.21.1/mods/`. Mods are user
+  data; the image is unchanged.
+
+## [1.4.10] - 2026-11-10
 
 ### Added
 

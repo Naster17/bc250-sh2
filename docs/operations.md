@@ -16,6 +16,8 @@ the top-level README.
 | Session mode | `gaming` (gamescope + Steam gamepad UI) |
 | Encoder | software (`libx264` / `openh264`) |
 
+Topic pages: [controller](controller.md), [metrics](metrics.md), [troubleshooting](troubleshooting.md). See the [documentation index](README.md).
+
 ## 1. Host requirements
 
 Alpine host, kernel `7.2.10-bc250rocm-r3`, Docker `29.8.2`, cgroup v2, compose
@@ -32,6 +34,7 @@ GPU: single AMD APU `1002:13fe` (Cyan Skillfish / BC-250), RADV `GFX1013`, one
 render node, no monitor attached. Docker user `nik` is in the `docker` group, so
 no root is needed anywhere below.
 
+
 ## 2. Directory layout on the host
 
 ```bash
@@ -44,6 +47,7 @@ mkdir -p ~/sh2/{data/home,games,state,journal}
 | `~/sh2/state` | `/var/lib/steam-headless` | auth state, TLS certificates, installation marker |
 | `~/sh2/journal` | `/var/log/journal` | persistent systemd journal |
 | `~/sh2/games` | `/mnt/games` | game library (`GameLibrary/Steam` created on first boot) |
+
 
 ## 3. Deploy / update
 
@@ -73,6 +77,7 @@ Update the base image:
 docker pull josh5/steam-headless:2
 docker compose build --no-cache && docker compose up -d
 ```
+
 
 ## 4. Verification
 
@@ -107,6 +112,7 @@ gamescope    --backend wayland --rt --fullscreen --grab --steam --expose-wayland
 steam        -gamepadui -pipewire -pipewire-dmabuf -steamos3 -steampal
 ```
 
+
 ## 5. Ports
 
 | Port | Protocol | Service |
@@ -119,6 +125,7 @@ steam        -gamepadui -pipewire -pipewire-dmabuf -steamos3 -steampal
 
 Host networking = one container per machine; a second desktop needs macvlan and
 its own LAN IP.
+
 
 ## 6. Sunshine session model
 
@@ -158,6 +165,7 @@ Then reconnect **once**, from a fresh tab/page, with no other GameStream client
 active. Rules: one client at a time; never retry in the tab that just failed;
 several viewers → SHUI Desktop Portal (single encode, fan-out); one stream ≈ one
 CPU core on this box.
+
 
 ## 7. Session modes
 
@@ -214,6 +222,7 @@ If one cursor is still not enough, next knobs are `--hide-cursor-delay 3000`
 `libvirtualhid Touchscreen` / `Pen Tablet` devices so KWin does not switch its
 pointer source between absolute and relative virtual mice.
 
+
 ## 8. Encoders
 
 GFX1013 exposes no working VAAPI encoder:
@@ -237,254 +246,14 @@ docker exec steam-headless vainfo
 docker exec steam-headless gst-inspect-1.0 va | tail -3
 ```
 
+
 ## 9. Controller: long-press Select → Quick Access Menu
 
-Steam's system chords are hardcoded to the Guide button (`chord_xboxone.vdf`:
-Guide+A = `system_key_1`, Guide+B hold = `quit_application`), which is useless
-when that button is worn out. The image therefore adds one extra activator to
-Steam's shipped default layouts, with Valve's (inverted) input names:
-
-```text
-"button_menu"  ->  game_action Default SELECT   # the physical Select/Back button
-  Long_Press (500 ms) -> controller_action system_key_1   # Quick Access Menu
-
-"button_escape" ->  game_action Default START   # the physical Start/Menu button
-  (left alone)
-```
-
-`system_key_1` is exactly what Guide+A opens: the right-hand panel with
-Performance, Friends and notifications. Short presses are untouched, so Select
-still reaches the game.
-
-The naming trap: `button_escape` sounds like Back/Select but the shipped gamepad
-layout binds it to `Default START`, while `button_menu` is `Default SELECT`.
-Binding the long press to `button_escape` opens the panel on Start instead of
-Select. `TARGET_INPUT` in the patcher is therefore `"button_menu"`; changing it
-retargets already patched files in place (the block is removed from wherever it
-was and re-inserted, keeping the byte size identical).
-
-| File in the image | Role |
-|---|---|
-| `/usr/local/bin/steam-controller-patch` | inserts the activator into `basicui.vdf`, `basicui_gamepad.vdf`, `desktop_xboxone.vdf` and `templates/controller_xboxone_gamepad_joystick.vdf` (Big Picture, Desktop and default per-game layouts) |
-| `/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | re-runs it on every container start |
-
-Two constraints shaped the implementation:
-
-1. **Steam verifies file sizes.** At startup it logs
-   `BVerifyInstalledFiles: controller_base/desktop_xboxone.vdf is N bytes, expected 7924`
-   and later re-extracts mismatching files from the depot, silently reverting the
-   patch. KeyValues ignores whitespace, so the patcher removes exactly as many
-   leading indentation characters as it inserts and every file keeps its original
-   byte length — no mismatch line, no repair.
-2. **Files are CRLF.** They must be read and written as bytes; a text-mode
-   round-trip converts `\r\n` to `\n` and breaks the size (and the repair).
-
-Verify:
-
-```bash
-C=/home/steamheadless/.local/share/Steam/controller_base
-docker exec steam-headless grep -c system_key_1 \
-  $C/basicui.vdf $C/basicui_gamepad.vdf $C/desktop_xboxone.vdf \
-  $C/templates/controller_xboxone_gamepad_joystick.vdf      # 4 4 1 1
-docker exec steam-headless stat -c '%s %n' $C/desktop_xboxone.vdf   # 7924
-docker exec steam-headless journalctl -u steam-headless-steam -n 300 | grep -c BVerifyInstalledFiles
-```
-
-The patcher validates every file with an embedded KeyValues parser before writing
-and refuses to write a result that does not parse, that contains duplicate
-activators, or whose byte size changed. This matters: an invalid layout makes
-Steam log `CPrepareConfigWorker failed for AppID 769` /
-`No config for controller found locally` and **the whole pad stops working** in
-the gamepad UI, not just the new binding. Two traps that produced exactly that:
-
-- dropping the `{` that opens an input block while inserting;
-- adding a second `"Long_Press"` to an input that already has one.
-
-If the pad is dead after an edit, check those log lines first, then restore the
-files to their depot size (Steam re-extracts them on its next client update) and
-restart `steam-headless-steam`.
-
-Changing the timing: edit `LONG_PRESS_MS` in
-`rootfs/usr/local/bin/steam-controller-patch` and rebuild. The patcher treats a
-block with a different timing as stale, removes it and re-inserts the new one,
-returning the freed bytes as trailing spaces so the depot size stays exact — no
-need to reset the files to stock first.
-
-Caveats: a Steam client update restores the stock files, and the patch is only
-re-applied at the next container start (`docker compose restart` is enough); if
-Steam's UI keeps a cached copy, restart `steam-headless-steam` after patching.
+Moved to [docs/controller.md](controller.md).
 
 ## 10. Performance overlay metrics (GPU %, CPU MHz)
 
-The BC-250 exposes less telemetry than a normal desktop GPU, and Steam's overlay
-(`gameoverlayui.so`) reads plain sysfs, so two numbers come out wrong out of the
-box. Both are fixed by publishing the values the overlay expects, inside the
-container only.
-
-### GPU utilisation
-
-Steam reads exactly one file for GPU %:
-
-```text
-/sys/class/drm/card0/device/gpu_busy_percent
-```
-
-The amdgpu driver answers that read with `EOPNOTSUPP` on GFX1013 (there is no
-per-ASIC switch), which is why the overlay showed values like `655%`.
-`amdgpu_top` is correct because it never asks the driver: it parses the per-client
-engine counters in `/proc/<pid>/fdinfo/<fd>`
-
-```text
-drm-engine-gfx:	123456789 ns
-```
-
-and divides the delta by the sampling interval
-(`libamdgpu_top/src/stat/fdinfo/proc_info.rs::diff_usage`).
-
-`/usr/local/bin/steam-gpu-load` (unit `steam-gpu-load.service`) does the same:
-sums the delta across every DRM client in the container every 500 ms and writes an
-integer percentage into `/run/gpu-metrics/gpu_busy_percent`, which
-`docker-compose.yml` bind-mounts over the sysfs path. The file is written in
-place at a fixed width, so a concurrent reader never sees a truncated value.
-
-The overlay in gaming mode is **MangoHud** (`mangoapp`, spawned by gamescope), not
-Steam's own overlay. MangoHud reads two sources and prefers the second:
-
-1. `/sys/class/drm/card0/device/gpu_busy_percent` (`AMDGPU::get_sysfs_metrics`)
-2. the binary `/sys/class/drm/card0/device/gpu_metrics` table
-   (`AMDGPU::get_samples_and_copy`, which overwrites `metrics.load` on every poll)
-
-In that 128-byte table (header `structure_size=128 format_revision=2
-content_revision=2`) the field `average_gfx_activity` sits at **offset 28**. The
-SMU reports `0xFFFF` there on this APU, and MangoHud's centipercent heuristic
-(`if (load > 100) load /= 100`) turns `65535` into `655` — that is the 655% in the
-overlay. `gpu_busy_percent` cannot help because it is overwritten by the metrics
-poll.
-
-So the same daemon rewrites the table every cycle: it reads the real table through
-`/run/gpu-device/gpu_metrics` (the PCI device directory bind-mounted read-only),
-patches the two bytes at offset 28 with the measured percentage, and writes the
-result into the file shadowing the sysfs path. Every other field (temperatures,
-clocks, power) is passed through untouched, so those keep tracking the hardware.
-The activity field is written as a plain percentage, not the driver's
-centipercent, because values ≤ 100 are exactly what MangoHud renders.
-
-Where the percentage comes from, in order:
-
-1. `average_gfx_activity` of the real table, rounded from centipercent. This is
-   the driver's own number and what amdgpu_top shows, so the overlay matches it.
-   `0xFFFF` means the SMU has no sample for that cycle.
-2. Only then, the per-client `drm-engine-gfx` counters from
-   `/proc/<pid>/fdinfo/<fd>` (`libamdgpu_top/src/stat/fdinfo/proc_info.rs` does
-   the same). They must be aggregated **by `drm-client-id`**, never per
-   descriptor: every fd of a client repeats the client's cumulative counter, and
-   summing per fd multiplies the load (29 descriptors vs 18 clients on this box
-   gave the `75-85%` readings). The baseline is re-taken whenever the fallback
-   resumes, so the first delta after a gap cannot spike.
-
-The host files must exist before the container starts:
-
-```bash
-mkdir -p "${SH2_DIR:-/opt/steam-headless}/metrics"
-printf '00\n' > "${SH2_DIR:-/opt/steam-headless}/metrics/gpu_busy_percent"
-cp /sys/class/drm/card0/device/gpu_metrics \
-   "${SH2_DIR:-/opt/steam-headless}/metrics/gpu_metrics"   # 128-byte seed
-```
-
-### GPU clock
-
-The BC-250 8-core unlock corrupts the clock reporting of the driver: with a
-locked 350 MHz the raw `hwmon/hwmon<N>/freq1_input` reads `100 MHz` forever, and
-`gpu_metrics.current_gfxclk` carries the same nonsense, so the overlay showed
-`100 MHz` (or flickering `7 / 30 / 20 / 41`) while amdgpu_top reported the real
-value. The userspace SMU governor (`cyan-skillfish-governor-smu`, which also
-drives the power plans) reads the clock over SMU and republishes it as bind
-overlays on the host's `freq1_input`, `pp_dpm_sclk` and the clock fields of
-`gpu_metrics`. That is the number to trust.
-
-Two traps:
-
-- A bind of `/sys/class/drm/card0/device` into the container is a snapshot of
-  the host's mount tree. The governor re-creates its overlays every time it
-  restarts, which is exactly what a power-plan change does, so the container
-  kept reading the raw (corrupted) file after each switch.
-- `mangoapp` opens `freq1_input` once at startup and keeps the descriptor, so a
-  shadow mounted after the compositor started never reaches the overlay.
-
-`steam-gpu-load` therefore reads the governor's value through
-`/host-proc/1/root/sys/class/hwmon/*/freq1_input` (the host's PID 1 root, so the
-lookup always follows the host's current mounts), then republishes it at the
-paths the overlays read: its own file bind-mounted over `freq1_input` in Hz, and
-the `average_gfxclk_frequency`/`current_gfxclk` fields of the shadowed
-`gpu_metrics`. `systemd` starts the service before
-`steam-headless-gamescope.service` so the mount exists before `mangoapp` opens
-the attribute. Verified with a locked 350 MHz plan: the host attribute, the
-published file and the container's `freq1_input` all read `350000000`, and the
-overlay shows 350 MHz.
-
-The raw table remains the fallback when the governor is not running. Values
-below 200 MHz are treated as corruption: the unlock reports 2..100 MHz, and the
-attribute reads a bare `100` for a moment while the governor re-creates its
-overlay during a plan change, which is what made the overlay flash 100 MHz.
-
-The published clock is the live one, not the plan value. Sampled every 200 ms
-while `vkmark` loaded the GPU on the 1000 MHz plan:
-
-```text
-1000 1000 1200 1200 1200 1200 1200 1000 1000 1000 1200 1200 1400 1400 1400 1200 1000
-```
-
-Intermediate steps appear because the governor ramps in 200 MHz increments
-(`frequency-thresholds.adjust`, ramp-rates); the display lags at most one
-governor sample plus one publish cycle, so about 1 s.
-
-### Starting on demand
-
-The container has `restart: "no"` and the docker daemon is not enabled in a
-runlevel, so a host boot leaves the machine idle. Start it explicitly:
-
-```shell
-doas rc-service docker start          # only after a boot
-docker start steam-headless           # plain start, keeps the existing container
-# or, after changing compose/Dockerfile:
-cd ~/steam-headless-bc250 && docker compose up -d
-```
-
-`docker start` re-runs the container with its configured mounts, so the host's
-sysfs overlays are re-resolved and the GPU clock path stays correct.
-
-### CPU clock
-
-Steam reads:
-
-```text
-/sys/devices/system/cpu/cpu<N>/cpufreq/scaling_cur_freq   (kHz)
-/sys/devices/system/cpu/cpu<N>/cpufreq/cpuinfo_min_freq
-```
-
-The BC-250 runs a fixed-clock kernel: no cpufreq driver is registered, so
-`/sys/devices/system/cpu/cpufreq/` is empty and the per-CPU directories do not
-exist. The overlay then shows a constant. btop still reports the real clock
-because it falls back to `/proc/cpuinfo`.
-
-`/usr/local/bin/steam-cpu-freq` (unit `steam-cpu-freq.service`) cannot create
-those directories — sysfs is read-only — so it shadows each existing
-`/sys/devices/system/cpu/cpu<N>` inside the container with a view that symlinks
-every real entry through `/run/cpu-real` (topology, cache, driver, power keep
-working) and adds a real `cpufreq/` directory. The files are then kept in sync
-with `/proc/cpuinfo` every second. The mounts live in the container's mount
-namespace only.
-
-### Verify
-
-```bash
-docker exec steam-headless cat /sys/class/drm/card0/device/gpu_busy_percent   # live %
-docker exec steam-headless cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq
-docker exec steam-headless systemctl is-active steam-gpu-load steam-cpu-freq
-```
-
-Idle desktop UI sits near `0`, the Steam gamepad UI during animations around
-`60`, and a 3D load (`glmark2`) pins `100` — that range was measured on this box.
+Moved to [docs/metrics.md](metrics.md).
 
 ## 11. Managed Sunshine config
 
@@ -521,6 +290,7 @@ client inside the same session):
 }
 ```
 
+
 ## 12. Apps and launchers in gaming mode
 
 Only Steam and the processes it spawns inherit
@@ -533,6 +303,7 @@ SHUI lands on KWin (invisible under the fullscreen gamescope), so:
   `docker exec steam-headless steam-headless-app-install --id prism-launcher --flatpak org.prismlauncher.PrismLauncher --filesystem /mnt/games`;
 - adding a non-Steam shortcut needs desktop-mode Steam UI (gamepad UI has no such
   button) or a generated `shortcuts.vdf`.
+
 
 ## 13. Daily operations
 
@@ -548,6 +319,7 @@ docker exec steam-headless journalctl -u steam-headless-gamescope -n 50 --no-pag
 docker exec steam-headless journalctl -u steam-headless-steam -n 50 --no-pager
 docker exec steam-headless journalctl -u steam-headless-sunshine -n 50 --no-pager
 ```
+
 
 ## 14. Backup / restore
 
@@ -568,30 +340,10 @@ docker logs steam-headless 2>&1 | head -n 55
 
 Never delete `/var/lib/steam-headless/installation.json` or `/home/steamheadless`.
 
+
 ## 15. Troubleshooting
 
-| Symptom | Cause / fix |
-|---|---|
-| `docker: unknown command: docker compose` | compose plugin missing → install per user (§1) |
-| SHUI `000`, unit `activating (auto-restart)` | encoder selection failed → `SHUI_ENCODER=software` (§8) |
-| `Failed to start RTSP … error 111` | 48010 closed because an app is still flagged as running → reset (§6) |
-| `An app is already running on this host (Error 400)` | same stuck flag → reset (§6) |
-| `Starting control stream establishment failed: Error 2 … UDP 47999` | control handshake never completed — competing client, half-open session, reused tab → reset (§6) |
-| second cursor blinking in the centre, clicks do nothing | `--force-grab-cursor` → baked drop-in removes it (§7.1) |
-| stream dies 10–15 s after the app launches | client abort after failed handshake (`Executing Undo Cmd`, no `CLIENT CONNECTED`) |
-| container silently back in KDE after boot | `steam-headless-gaming-fallback` fired (4 failures / 60 s) → `journalctl -u steam-headless-gamescope -u steam-headless-steam` |
-| `gamescope` exits `status=126/n/a`, `Permission denied` | launcher script on a `noexec` tmpfs (`/run`, `/tmp`) → keep it under `$HOME` (§7.1) |
-| `docker compose up -d` fails: `mkdir /sys/devices/virtual/input: operation not permitted` | a sysfs bind mount whose source only exists after uinput registers; removed in 1.4.1 — the container's own uinput devices show up through `/sys` and its private `/dev/input` |
-| black screen with only the cursor after `docker compose up -d` (UI never draws, `steam-ready` exists) | Steam's gamepad UI occasionally fails to come up on a fresh container; the session itself is healthy → `docker exec steam-headless systemctl restart steam-headless-steam` and wait ~20 s |
-| `KWin did not become ready for Gamescope` | `steam-headless-compositor.service` failed; gamescope exits by design |
-| gamepad UI shows a login screen | `loginusers.vdf` has no `AccountName` → log in once in desktop mode |
-| `Configuration file ... is marked world-writable` | cosmetic systemd warnings shipped by the image |
-| SHUI `401` on `curl` | normal: portal up, sign-in required |
-| `http: TLS handshake error … unknown certificate` in SHUI log | browser has not accepted the self-signed cert for that URL form |
-| Moonlight cannot discover the host | needs `network_mode: host`; UDP 47984-48010 open |
-| `Couldn't set default-sink [auto_null]: No such entity` | harmless, logged when a session ends |
-| container exits immediately | `docker logs steam-headless`: missing `/dev/uhid`, dropped `cgroup: private` / `writable-cgroups=true`, wrong `stop_signal` |
-| wrong file ownership inside container | `PUID`/`PGID` must equal `id -u` / `id -g` of the host owner of `SH2_DIR` |
+Moved to [docs/troubleshooting.md](troubleshooting.md).
 
 ## 16. Custom boot / suspend animations
 
@@ -617,6 +369,7 @@ Naming conventions used by SteamOS for the sleep clips:
 
 These are personal media and are deliberately kept out of the repository — only
 code, units and documentation are versioned here.
+
 
 ## 17. Cold boot and fresh deploy
 
@@ -650,4 +403,3 @@ This compose targets an AMD GPU with the BC-250 kernel:
 - on a system without `/sys/class/drm/card0/device/gpu_metrics` (e.g. NVIDIA),
   Docker would try to create that path inside sysfs and fail — remove the two
   metric mounts from `docker-compose.yml` there.
-

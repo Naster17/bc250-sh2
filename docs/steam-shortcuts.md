@@ -349,4 +349,6 @@ The live Prism shortcut is the original 449-byte file with
 
 - [Prism Launcher 9.x and offline accounts](prism-launcher.md) — the Prism
   AppImage, offline `accounts.json`, and the live shortcut values.
+- [Minecraft controller support](minecraft-controller.md) — Controlify + YACL
+  and the Steam Input gamepad layout.
 - [Operations manual](operations.md) — container modes, Sunshine, and ports.

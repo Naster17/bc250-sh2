@@ -16,6 +16,20 @@ flowchart LR
     end
 ```
 
+## Contents
+
+- [What this image adds](#what-this-image-adds)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Verify](#verify)
+- [Session modes](#session-modes)
+- [Operating notes](#operating-notes)
+- [Dynamic per-client display mode](#dynamic-per-client-display-mode)
+- [Custom boot / suspend animations](#custom-boot--suspend-animations)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [License / credits](#license--credits)
+
 ## What this image adds
 
 | Path | Purpose |
@@ -146,7 +160,9 @@ Notes:
   on any controller whose Guide button is flaky; a short `Select` press still goes
   to the game. The binding lives in Steam's default layouts, so it applies to the
   gamepad UI, the desktop and games alike — see
-  [docs/operations.md](docs/operations.md#9-controller-long-press-select--quick-access-menu).
+  [docs/controller.md](docs/controller.md).
+  For Minecraft controller support in the NeoForge instance, see
+  [docs/minecraft-controller.md](docs/minecraft-controller.md).
 
 ## Dynamic per-client display mode
 
@@ -242,9 +258,15 @@ Makefile                  # up/build/logs/mode-*/reset-sunshine/backup/verify
 .dockerignore             # keep VCS, docs and local data out of the build context
 LICENSE                   # MIT for this layer; upstream projects keep theirs
 scripts/health.sh         # read-only readiness check (make verify)
-docs/operations.md        # full ops manual: ports, Sunshine resets, modes, troubleshooting
+scripts/prepare-host.sh   # host directories and metric seeds (make dirs)
+docs/README.md            # documentation index
+docs/operations.md        # deploy, host layout, ports, session modes, daily ops, backup
+docs/controller.md        # Select long-press → Quick Access Menu
+docs/metrics.md           # BC-250 GPU/CPU telemetry
+docs/troubleshooting.md   # symptom → fix
 docs/steam-shortcuts.md   # binary shortcuts.vdf, appid, verification
 docs/prism-launcher.md    # Prism 9.x, offline account, Steam shortcut
+docs/minecraft-controller.md  # Controlify + YACL, Steam Input layout
 CHANGELOG.md
 rootfs/
   etc/systemd/system/
@@ -262,6 +284,13 @@ rootfs/
   usr/local/sh-init.d/{10-seed-sunshine-config.sh,20-patch-steam-controller-base.sh,30-manage-sunshine-display-prep.sh}
   usr/share/steam-headless-custom/{sunshine.conf,apps.json}
 ```
+
+## Documentation
+
+The [docs index](docs/README.md) lists the topic pages. The
+[operations manual](docs/operations.md) covers deploy, host layout, ports,
+session modes, daily operations and recovery; controller, metrics and
+troubleshooting have their own pages.
 
 ## License / credits
 
