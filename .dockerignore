@@ -1,0 +1,11 @@
+# The image only installs rootfs/; keep VCS, local data and host config out.
+.git
+.gitignore
+.env
+.env.example
+backups/
+docs/
+tests/
+__pycache__/
+*.pyc
+*.log
