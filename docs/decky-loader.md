@@ -39,6 +39,8 @@ downgrade a loader the user has updated from the UI.
    also works; the Select binding is the one this image patches in.
 3. Open the Decky icon (a plug) in the QAM. The store icon opens the plugin
    browser. Installing plugins needs internet access.
+   The image also seeds **Fantastic BC250** into `~/homebrew/plugins` on first
+   boot; it is disabled by default. See [fan-control.md](fan-control.md).
 4. Steam updates can temporarily hide Decky until the next injection. Restart
    `plugin_loader` or the container if it does not come back.
 

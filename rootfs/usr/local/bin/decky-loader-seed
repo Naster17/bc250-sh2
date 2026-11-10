@@ -10,6 +10,7 @@ set -euo pipefail
 readonly home=/home/steamheadless
 readonly source=/opt/decky-loader/PluginLoader
 readonly version_file=/opt/decky-loader/VERSION
+readonly plugin_source=/opt/decky-loader/plugins
 readonly brew="${home}/homebrew"
 readonly services="${brew}/services"
 readonly target="${services}/PluginLoader"
@@ -43,6 +44,26 @@ if [[ ! -x "${target}" ]]; then
     echo "decky-loader-seed: installed $(<"${version_file}") into ${target}"
 else
     echo "decky-loader-seed: keeping existing ${target} ($(cat "${installed_version}" 2>/dev/null || echo version unknown))"
+fi
+
+# First-party Decky plugins are baked under /opt/decky-loader/plugins.  Seed
+# them only when the user does not already have that plugin directory; the
+# Decky store and the user's own installs remain authoritative afterwards.
+if [[ -d "${plugin_source}" ]]; then
+    shopt -s nullglob
+    for plugin_src in "${plugin_source}"/*; do
+        [[ -d "${plugin_src}" ]] || continue
+        plugin_name="$(basename "${plugin_src}")"
+        plugin_dest="${brew}/plugins/${plugin_name}"
+        if [[ ! -e "${plugin_dest}" ]]; then
+            cp -a "${plugin_src}" "${plugin_dest}"
+            chown -R "${uid}:${gid}" "${plugin_dest}"
+            echo "decky-loader-seed: installed Decky plugin ${plugin_name}"
+        else
+            echo "decky-loader-seed: keeping existing Decky plugin ${plugin_name}"
+        fi
+    done
+    shopt -u nullglob
 fi
 
 # Steam reads this marker at startup. Create it before the session starts so

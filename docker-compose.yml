@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        IMAGE_VERSION: ${IMAGE_VERSION:-1.5.0}
+        IMAGE_VERSION: ${IMAGE_VERSION:-1.6.0}
         GIT_REVISION: ${GIT_REVISION:-unknown}
     image: steam-headless-bc250:2
     container_name: steam-headless
@@ -82,6 +82,11 @@ services:
       # container unstartable. The container registers its own uinput devices and
       # sees them through the regular /sys mount and its private /dev/input tmpfs.
       - ${SH2_DIR:-/opt/steam-headless}/state:/var/lib/steam-headless
+      # The host bc250-fan-curve daemon is the only pwm2 writer.  The Decky
+      # plugin and the fan CLI exchange manual/auto requests through this
+      # runtime directory; the plugin's heartbeat falls back to the host curve
+      # if the container stops.
+      - /run/bc250-fan:/run/bc250-fan
       - ${SH2_DIR:-/opt/steam-headless}/journal:/var/log/journal
       - ${SH2_DIR:-/opt/steam-headless}/data/home:/home/steamheadless
       - ${SH2_DIR:-/opt/steam-headless}/games:/mnt/games

@@ -52,7 +52,7 @@ mkdir -p "${SH2_DIR:-/opt/steam-headless}"/{data/home,games,state,journal}
 ```bash
 cd "${REPO_DIR:-$HOME/steam-headless-bc250}"
 cp .env.example .env            # set SH2_DIR, PUID, PGID, TZ
-make build                      # :2 plus :1.5.0; ~1 min with Decky download
+make build                      # :2 plus :1.6.0; ~1 min with Decky download
 make up
 docker compose logs -f
 ```
@@ -80,7 +80,7 @@ Update the base image:
 ```bash
 docker pull josh5/steam-headless:2
 docker compose build --no-cache
-docker tag steam-headless-bc250:2 steam-headless-bc250:1.5.0
+docker tag steam-headless-bc250:2 steam-headless-bc250:1.6.0
 make up
 ```
 

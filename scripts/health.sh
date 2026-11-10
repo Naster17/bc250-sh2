@@ -68,6 +68,26 @@ disabled) ok "client display modes" disabled ;;
 *) bad "client display modes" "state unreadable" ;;
 esac
 
+printf '\n== Decky plugin ==\n'
+if docker exec "$CONTAINER" test -f /home/steamheadless/homebrew/plugins/fantastic-bc250/plugin.json 2>/dev/null; then
+    ok "fantastic-bc250" installed
+else
+    bad "fantastic-bc250" missing
+fi
+
+printf '\n== fan arbiter ==\n'
+fan_pid=$(cat /run/bc250-fan-curve.pid 2>/dev/null || true)
+if [ -n "${fan_pid:-}" ] && kill -0 "$fan_pid" 2>/dev/null; then
+    ok "bc250-fan-curve" "running (pid $fan_pid)"
+else
+    bad "bc250-fan-curve" "not running"
+fi
+if [ -d /run/bc250-fan ]; then
+    ok "/run/bc250-fan" present
+else
+    bad "/run/bc250-fan" missing
+fi
+
 printf '\n== health ==\n'
 summary=$(docker exec "$CONTAINER" /usr/local/bin/steam-headless-healthcheck 2>/dev/null | tail -n1)
 case "$summary" in

@@ -16,6 +16,8 @@
 #     renders at that mode instead of being scaled
 #   * Decky Loader v3.3.1, pinned by checksum and seeded into the Steam home on
 #     every boot (Steam's CEF debug port and the plugin loader service)
+#   * Fantastic BC250 Decky plugin, seeded on first boot; it talks to the host
+#     bc250fc fan arbiter through /run/bc250-fan instead of writing sysfs
 # Pinned by digest: the tag is mutable, and the deltas below assume this exact
 # filesystem layout (systemd units in /usr/lib/systemd/system, Steam under
 # /home/steamheadless). Bump both tag and digest together.
@@ -23,7 +25,7 @@ FROM josh5/steam-headless:2@sha256:c60f4d7243a4d94515f722441fff90b752413bf6a45bb
 
 USER root
 
-ARG IMAGE_VERSION=1.5.0
+ARG IMAGE_VERSION=1.6.0
 ARG GIT_REVISION=unknown
 # Pinned Decky Loader release. Bump the version and checksum together.
 ARG DECKY_LOADER_VERSION=v3.3.1
@@ -40,6 +42,7 @@ LABEL org.opencontainers.image.title="Steam Headless BC-250" \
 # The curated rootfs mirrors the container filesystem; one COPY keeps the layer
 # count down. .dockerignore keeps VCS, docs and local data out of the context.
 COPY rootfs/ /
+COPY plugins/ /opt/decky-loader/plugins/
 
 # Ship Decky's PluginLoader in the image instead of downloading it at first
 # boot. The release asset is architecture-specific; this deployment is x86_64.
@@ -63,7 +66,13 @@ RUN set -eux; \
                /usr/local/bin/decky-loader-seed \
                /usr/local/sh-init.d/10-seed-sunshine-config.sh \
                /usr/local/sh-init.d/20-patch-steam-controller-base.sh \
-               /usr/local/sh-init.d/30-manage-sunshine-display-prep.sh; \
+               /usr/local/sh-init.d/30-manage-sunshine-display-prep.sh \
+               /opt/decky-loader/plugins/fantastic-bc250/bin/backend; \
+    chmod 0644 /opt/decky-loader/plugins/fantastic-bc250/plugin.json \
+               /opt/decky-loader/plugins/fantastic-bc250/main.py \
+               /opt/decky-loader/plugins/fantastic-bc250/dist/index.js \
+               /opt/decky-loader/plugins/fantastic-bc250/LICENSE; \
+    python3 -m json.tool /opt/decky-loader/plugins/fantastic-bc250/plugin.json >/dev/null; \
     chmod 0644 /etc/systemd/system/steam-headless-gamescope.service.d/50-no-force-grab-cursor.conf \
                /etc/systemd/system/steam-display-syncd.service \
                /etc/systemd/system/decky-loader-seed.service \

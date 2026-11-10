@@ -1,0 +1,33 @@
+[package]
+name = "fantastic-wasm"
+version = "0.5.0"
+edition = "2021"
+authors = ["NGnius (Graham) <ngniusness@gmail.com>"]
+description = "Frontend bindings for fan control functionality"
+license = "GPL-3.0-only"
+repository = "https://git.ngni.us/NG-SD-Plugins/Fantastic"
+keywords = ["utility", "fan-control", "root", "decky"]
+readme = "../../README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+usdpl-front = { version = "0.11", path = "../../../usdpl-rs/usdpl-front" }
+nrpc = { version = "0.10", path = "../../../nRPC/nrpc", default-features = false }
+prost = "0.11"
+
+[build-dependencies]
+usdpl-build = { version = "0.11", path = "../../../usdpl-rs/usdpl-build" }
+
+[features]
+debug = ["usdpl-front/debug"]
+decky = ["usdpl-front/decky"]
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"
+debug = false
+strip = true
+lto = true
+codegen-units = 4

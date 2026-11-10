@@ -1,4 +1,4 @@
-# The image only installs rootfs/; keep VCS, local data and host config out.
+# The image installs rootfs/ and plugins/; keep VCS, local data and host config out.
 .git
 .gitignore
 .env
@@ -9,3 +9,5 @@ tests/
 **/__pycache__/
 **/*.pyc
 *.log
+plugins/fantastic-bc250/backend-rs/target/
+plugins/fantastic-bc250/frontend-src/rust/pkg/

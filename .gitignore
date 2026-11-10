@@ -3,3 +3,5 @@
 backups/
 __pycache__/
 *.pyc
+plugins/fantastic-bc250/backend-rs/target/
+plugins/fantastic-bc250/frontend-src/rust/pkg/

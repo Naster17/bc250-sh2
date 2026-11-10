@@ -1,0 +1,33 @@
+[package]
+name = "fantastic-rs"
+version = "1.0.0-bc250"
+edition = "2021"
+authors = ["NGnius (Graham) <ngniusness@gmail.com>"]
+description = "Backend (superuser) functionality for Fantastic"
+license = "GPL-3.0-only"
+repository = "https://git.ngni.us/NG-SD-Plugins/Fantastic"
+keywords = ["utility", "fan-control", "root", "decky"]
+readme = "../README.md"
+
+
+[dependencies]
+usdpl-back = { version = "0.11", features = ["blocking"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+nrpc = { version = "0.10" }
+prost = "0.11"
+tokio = { version = "1", features = ["sync", "rt"] }
+
+# logging
+log = "0.4"
+simplelog = "0.12"
+
+[build-dependencies]
+usdpl-build = { version = "0.11" }
+
+[profile.release]
+debug = false
+strip = true
+lto = true
+codegen-units = 4

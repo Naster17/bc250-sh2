@@ -5,7 +5,8 @@ container into a SteamOS-like game console for an **AMD BC-250 (Cyan Skillfish,
 RADV GFX1013)** host: gamescope + Steam gamepad UI, software encoding, no VAAPI.
 
 Upstream image is **not** patched in place — everything we change lives under
-`rootfs/` and is copied over the stock filesystem.
+`rootfs/` (files copied over the stock filesystem) and `plugins/` (the default
+Decky plugin).
 
 ```mermaid
 flowchart LR
@@ -26,6 +27,7 @@ flowchart LR
 - [Operating notes](#operating-notes)
 - [Dynamic per-client display mode](#dynamic-per-client-display-mode)
 - [Decky Loader](#decky-loader)
+- [Fan control](#fan-control)
 - [Custom boot / suspend animations](#custom-boot--suspend-animations)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -43,6 +45,7 @@ flowchart LR
 | `rootfs/usr/local/bin/steam-display-request` + `rootfs/usr/local/bin/steam-display-syncd` + `rootfs/etc/systemd/system/steam-display-syncd.service` | **Dynamic per-client display mode.** Sunshine runs the unprivileged request helper at stream start; the root daemon applies `SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS` to the KWin virtual output and, in gaming mode, relaunches gamescope and Steam with the same output size and refresh. Moonlight's 720p60, 1080p90 or 1280x800 request therefore changes what the game actually renders, not just what Sunshine scales. |
 | `rootfs/usr/local/bin/steam-controller-patch` + `rootfs/usr/local/sh-init.d/20-patch-steam-controller-base.sh` | Adds a **500 ms long-press on Select → Quick Access Menu** (`controller_action system_key_1`, the right-hand panel with Performance/Friends) to the default Big Picture, Desktop and per-game Xbox layouts. Useful when the controller's Guide button is unreliable, since Steam's own chords all require Guide. Every patched file keeps its exact original byte size — Steam verifies `controller_base` against its depot manifest and re-extracts mismatching files. Re-applied on every boot, because a Steam client update restores the stock files. |
 | `rootfs/opt/decky-loader/LICENSE` + `rootfs/usr/local/bin/decky-loader-seed` + `rootfs/etc/systemd/system/{decky-loader-seed,plugin_loader}.service` | **Decky Loader `v3.3.1`.** The pinned release is baked into `/opt/decky-loader`, seeded into `~/homebrew` on first boot, and started by `plugin_loader.service` as root. The seed also writes Steam's `.cef-enable-remote-debugging` marker before the session starts, so Decky can inject its QAM menu. See [docs/decky-loader.md](docs/decky-loader.md). |
+| `plugins/fantastic-bc250` | **Fantastic BC250**, our default Decky fan plugin. A GPL-3.0 fork of NGnius/Fantastic with the Steam Deck `jupiter` backend replaced by a BC-250 bridge. Baked into `/opt/decky-loader/plugins`, seeded into `~/homebrew/plugins` on first boot, and disabled by default so the host curve remains authoritative. See [docs/fan-control.md](docs/fan-control.md). |
 | `rootfs/usr/local/bin/steam-gpu-load` + `rootfs/etc/systemd/system/steam-gpu-load.service` | Publishes GPU utilisation. The BC-250 driver answers `gpu_busy_percent` with `EOPNOTSUPP`, and the `gpu_metrics` table reports `0xFFFF` for `average_gfx_activity`, which MangoHud divides by 100 and renders as `655%`. The daemon rewrites both nodes inside the container from the driver's own centipercent value, falling back to per-`drm-client-id` `drm-engine-gfx` deltas. |
 | `rootfs/usr/local/bin/steam-cpu-freq` + `rootfs/etc/systemd/system/steam-cpu-freq.service` | Publishes the CPU clock. The BC-250 kernel registers no cpufreq driver, so `cpu*/cpufreq/scaling_cur_freq` does not exist and the overlay shows a constant. The service shadows each `cpuN` directory with a view that adds those files, fed from `/proc/cpuinfo`. |
 
@@ -70,7 +73,7 @@ cd steam-headless-bc250
 
 cp .env.example .env          # set SH2_DIR / PUID / PGID / TZ
 make dirs                     # host dirs + metric seed files compose mounts
-make build                    # :2 plus the :1.5.0 rollback tag
+make build                    # :2 plus the :1.6.0 rollback tag
 make up                       # start the container
 docker compose logs -f        # first boot prints the SHUI bootstrap password
 ```
@@ -170,7 +173,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.5.0` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.6.0` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
@@ -265,6 +268,30 @@ recreate, so Decky's own updater stays authoritative once it has run.
 
 Full details: [docs/decky-loader.md](docs/decky-loader.md).
 
+The image also seeds **Fantastic BC250** into `~/homebrew/plugins` on first
+boot. It is disabled by default; enable the custom fan curve in the Decky QAM
+when you want the plugin to own CPU_FAN1. The host `bc250-fan-curve` daemon
+remains the only writer of `pwm2`, and its heartbeat fail-safe returns to the
+host curve if the plugin or container stops. See
+[docs/fan-control.md](docs/fan-control.md).
+
+## Fan control
+
+The host [`bc250fc`](https://github.com/Naster17/bc250fc) `bc250-fan-curve`
+daemon is the only writer of CPU_FAN1 (`nct6686/pwm2`). The container bind
+mounts `/run/bc250-fan` read-write and both the `doas fan` CLI and the
+**Fantastic BC250** Decky plugin send requests through
+`/run/bc250-fan/control`:
+
+- `source=cli` is sticky until `doas fan auto`;
+- `source=decky` is a 5-second heartbeat;
+- stale/missing/`auto` records return to the host GPU-edge curve;
+- the plugin is installed by default but disabled, so the host curve remains
+  authoritative until you enable it in the QAM.
+
+The container never writes sysfs. Full protocol, host install and
+troubleshooting: [docs/fan-control.md](docs/fan-control.md).
+
 ## Custom boot / suspend animations
 
 Personal media is deliberately **not** in this repository. Steam reads custom
@@ -298,6 +325,8 @@ docs/site.md              # this deployment's host, paths, SteamID
 docs/operations.md        # deploy, host layout, ports, session modes, daily ops, backup
 docs/controller.md        # Select long-press → Quick Access Menu
 docs/decky-loader.md      # Decky v3.3.1: boot seed, QAM, updates, troubleshooting
+docs/fan-control.md       # host fan arbiter + default Fantastic BC250 plugin
+plugins/fantastic-bc250/  # default Decky plugin, source and built backend
 docs/metrics.md           # BC-250 GPU/CPU telemetry
 docs/troubleshooting.md   # symptom → fix
 docs/steam-shortcuts.md   # binary shortcuts.vdf, appid, verification

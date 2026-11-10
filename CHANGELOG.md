@@ -3,6 +3,25 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.6.0] - 2026-11-10
+
+### Added
+
+- **Fantastic BC250**, a GPL-3.0 fork of NGnius/Fantastic for the BC-250.
+  The Steam Deck `jupiter` backend is replaced with an nct6686 bridge that
+  reads GPU-edge temperature and CPU_FAN1 RPM and sends a 0–255 PWM heartbeat
+  to the host fan arbiter. Baked under `/opt/decky-loader/plugins` and seeded
+  into `~/homebrew/plugins` on first boot; disabled by default.
+- Host `/run/bc250-fan` bind mount and the `source=decky` heartbeat contract.
+- `docs/fan-control.md`, README fan section, health checks for the seeded
+  plugin and host `bc250-fan-curve` daemon.
+
+### Changed
+
+- Image version is `1.6.0`.
+- `bc250-fan-curve` in the host `bc250fc` repo is now the single writer of
+  CPU_FAN1; the CLI and Decky plugin no longer stop or race the daemon.
+
 ## [1.5.0] - 2026-11-10
 
 ### Added
@@ -64,6 +83,15 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   `Loading ImmediateWindowProvider fmlearlywindow` with no crash report; the
   optional early window was the failing stage. The game now proceeds to mod
   loading.
+- Controlify `3.0.1+lts`'s
+  `feature.virtualmouse.snapping.AbstractRecipeBookScreenMixin` is rejected by
+  NeoForge 21.1.265's Mixin 0.8.7 (`remappable @Shadow`). Removed that single
+  entry from the live jar's `controlify.mixins.json`; the rest of Controlify
+  loads. Recipe-book virtual-mouse snapping is disabled.
+- The x360 per-game template was missing from the patch targets; the Prism
+  shortcut uses `controller_xbox360_gamepad_joystick.vdf`, so Select long-press
+  worked in the Steam UI but not in games. Added the template and BOM handling
+  to the patcher; the live x360 template is patched.
 
 ### Documented
 

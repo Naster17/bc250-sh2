@@ -9,6 +9,7 @@ details:
 | [site.md](site.md) | This deployment's host, paths, portal URL, timezone, SteamID |
 | [controller.md](controller.md) | Steam controller layouts: 500 ms Select long-press → Quick Access Menu |
 | [decky-loader.md](decky-loader.md) | Decky Loader v3.3.1: boot seeding, QAM access, updates, troubleshooting |
+| [fan-control.md](fan-control.md) | BC-250 fan arbiter, default Fantastic BC250 plugin, CLI, safety and troubleshooting |
 | [metrics.md](metrics.md) | BC-250 GPU utilisation and clock publication for MangoHud |
 | [troubleshooting.md](troubleshooting.md) | Symptom → cause/fix table |
 | [steam-shortcuts.md](steam-shortcuts.md) | Binary `shortcuts.vdf`, appid calculation, verification |

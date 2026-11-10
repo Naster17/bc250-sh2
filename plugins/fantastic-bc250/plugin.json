@@ -1,0 +1,12 @@
+{
+    "name": "Fantastic BC250",
+    "author": "Steam Headless BC-250 (fork of NGnius/Fantastic)",
+    "version": "1.0.0",
+    "flags": ["root", "global-dfl"],
+    "api_version": 1,
+    "publish": {
+        "description": "BC-250 CPU_FAN1 curve control through the host fan arbiter",
+        "tags": ["utility", "fan-control", "root", "bc250"],
+        "image": "https://raw.githubusercontent.com/NGnius/Fantastic/main/assets/thumbnail.png"
+    }
+}
