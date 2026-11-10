@@ -1053,6 +1053,8 @@
   var setTemperature_display = (_) => { };
   var fanRpmCache = -273;
   var setFanRpm_display = (_) => { };
+  var manualSpeedTimer = null;
+  var manualSpeedSeq = 0;
   const Content = ({ serverAPI }) => {
       // const [result, setResult] = useState<number | undefined>();
       // const onClick = async () => {
@@ -1072,9 +1074,49 @@
       const [_serverApiGlobal, setServerApi] = React.useState(serverAPI);
       const [firstTime, setFirstTime] = React.useState(true);
       const [curveGlobal, setCurve_internal] = React.useState(curve_backup);
+      const [manualSpeedGlobal, setManualSpeedState] = React.useState(0);
       const setCurve = (value) => {
           setCurve_internal(value);
           curve_backup = value;
+          if (value.length > 0) {
+              const flat = value.every((point) => Math.abs(point.y - value[0].y) < 0.005);
+              const speed = flat
+                  ? value[0].y
+                  : value.reduce((sum, point) => sum + point.y, 0) / value.length;
+              setManualSpeedState(Math.round(speed * 100));
+          }
+      };
+      const setManualSpeed = (value) => {
+          setManualSpeedState(value);
+          if (!enabledGlobal) {
+              setEnable(true);
+              resolve(setEnabled(true), setEnable);
+          }
+          const seq = ++manualSpeedSeq;
+          if (manualSpeedTimer != null) {
+              clearTimeout(manualSpeedTimer);
+          }
+          manualSpeedTimer = setTimeout(async () => {
+              if (seq !== manualSpeedSeq) {
+                  return;
+              }
+              let current = await getCurve();
+              while (current.length > 0) {
+                  current = await removeCurvePoint(0);
+                  if (seq !== manualSpeedSeq) {
+                      return;
+                  }
+              }
+              current = await addCurvePoint({ x: 0, y: value / 100 });
+              if (seq !== manualSpeedSeq) {
+                  return;
+              }
+              current = await addCurvePoint({ x: 1, y: value / 100 });
+              if (seq !== manualSpeedSeq) {
+                  return;
+              }
+              setCurve(current);
+          }, 150);
       };
       const [temperatureGlobal, setTemperature] = React.useState(tempCache);
       const [fanRpmGlobal, setFanRpm] = React.useState(fanRpmCache);
@@ -1246,6 +1288,8 @@
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
               window.SP_REACT.createElement(deckyFrontendLib.Field, { label: "Current Temperature" }, temperatureGlobal.toFixed(1) + " °C")),
           window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
+              window.SP_REACT.createElement(deckyFrontendLib.SliderField, { label: "Fan Speed", description: "Manual flat curve; overrides temperature control", value: manualSpeedGlobal, min: 0, max: 100, step: 1, showValue: true, onChange: setManualSpeed })),
+          window.SP_REACT.createElement(deckyFrontendLib.PanelSectionRow, null,
               window.SP_REACT.createElement(deckyFrontendLib.ToggleField, { label: "Custom Fan Curve", description: "Overrides the BC-250 host fan curve", checked: enabledGlobal, onChange: (value) => {
                       resolve(setEnabled(value), setEnable);
                   } })),
@@ -1296,6 +1340,7 @@
           icon: ico,
           onDismount() {
               clearInterval(periodicHook);
+              clearTimeout(manualSpeedTimer);
           },
       };
   });

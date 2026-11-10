@@ -79,8 +79,10 @@ control file.
 
 ## Use
 
-Quick Access Menu → Decky → Fantastic BC250. The graph edits the GPU-edge
-curve; the toggle enables/disables the plugin. The plugin stores its settings
+Quick Access Menu → Decky → Fantastic BC250. The **Fan Speed** slider sets a
+flat 0–100% target and enables the plugin; the graph below edits the
+temperature curve (moving the slider replaces the curve with a flat one). The
+toggle enables/disables the plugin. The plugin stores its settings
 in `~/.config/fantastic/fantastic.json`; the backend derives that path from
 `$HOME`, which `main.py` sets to `/home/steamheadless`. The host CLI remains
 usable:

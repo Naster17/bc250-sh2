@@ -5,6 +5,7 @@ import {
   Field,
   ServerAPI,
   ToggleField,
+  SliderField,
   staticClasses,
   Navigation,
 } from "decky-frontend-lib";
@@ -26,6 +27,8 @@ var name: string = "";
 var version: string = "";
 
 var curve_backup: {x: number, y: number}[] = [];
+var manualSpeedTimer: any = null;
+var manualSpeedSeq: number = 0;
 
 var tempCache: number = -1337;
 var setTemperature_display = (_: number) => {};
@@ -54,11 +57,53 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
   const [_serverApiGlobal, setServerApi] = useState<ServerAPI>(serverAPI);
   const [firstTime, setFirstTime] = useState<boolean>(true);
   const [curveGlobal, setCurve_internal] = useState<{x: number, y: number}[]>(curve_backup);
+  const [manualSpeedGlobal, setManualSpeedState] = useState<number>(0);
 
   const setCurve = (value: {x: number, y: number}[]) => {
     setCurve_internal(value);
     curve_backup = value;
-  }
+    if (value.length > 0) {
+      const flat = value.every((point) => Math.abs(point.y - value[0].y) < 0.005);
+      const speed = flat
+        ? value[0].y
+        : value.reduce((sum, point) => sum + point.y, 0) / value.length;
+      setManualSpeedState(Math.round(speed * 100));
+    }
+  };
+
+  const setManualSpeed = (value: number) => {
+    setManualSpeedState(value);
+    if (!enabledGlobal) {
+      setEnable(true);
+      backend.resolve(backend.setEnabled(true), setEnable);
+    }
+
+    const seq = ++manualSpeedSeq;
+    if (manualSpeedTimer != null) {
+      clearTimeout(manualSpeedTimer);
+    }
+    manualSpeedTimer = setTimeout(async () => {
+      if (seq !== manualSpeedSeq) {
+        return;
+      }
+      let current = await backend.getCurve();
+      while (current.length > 0) {
+        current = await backend.removeCurvePoint(0);
+        if (seq !== manualSpeedSeq) {
+          return;
+        }
+      }
+      current = await backend.addCurvePoint({x: 0, y: value / 100});
+      if (seq !== manualSpeedSeq) {
+        return;
+      }
+      current = await backend.addCurvePoint({x: 1, y: value / 100});
+      if (seq !== manualSpeedSeq) {
+        return;
+      }
+      setCurve(current);
+    }, 150);
+  };
 
   const [temperatureGlobal, setTemperature] = useState<number>(tempCache);
   const [fanRpmGlobal, setFanRpm] = useState<number>(fanRpmCache);
@@ -263,6 +308,18 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
         </Field>
       </PanelSectionRow>
       <PanelSectionRow>
+        <SliderField
+          label="Fan Speed"
+          description="Manual flat curve; overrides temperature control"
+          value={manualSpeedGlobal}
+          min={0}
+          max={100}
+          step={1}
+          showValue={true}
+          onChange={setManualSpeed}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
         <ToggleField
           label="Custom Fan Curve"
           description="Overrides SteamOS fan curve"
@@ -345,6 +402,7 @@ export default definePlugin((serverApi: ServerAPI) => {
     icon: ico,
     onDismount() {
       clearInterval(periodicHook!);
+      clearTimeout(manualSpeedTimer!);
     },
   };
 });

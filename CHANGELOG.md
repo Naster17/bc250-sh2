@@ -12,6 +12,9 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   reads GPU-edge temperature and CPU_FAN1 RPM and sends a 0–255 PWM heartbeat
   to the host fan arbiter. Baked under `/opt/decky-loader/plugins` and seeded
   into `~/homebrew/plugins` on first boot; disabled by default.
+- Fantastic BC250 includes a Quick Access Menu fan-speed slider. Moving it
+  enables the plugin and writes a flat 0–100% target; the temperature curve is
+  still editable from the graph.
 - Host `/run/bc250-fan` bind mount and the `source=decky` heartbeat contract.
 - `docs/fan-control.md`, README fan section, health checks for the seeded
   plugin and host `bc250-fan-curve` daemon.

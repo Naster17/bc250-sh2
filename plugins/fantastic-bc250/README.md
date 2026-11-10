@@ -59,7 +59,8 @@ The Steam Headless BC-250 image bakes this directory into
 `/opt/decky-loader/plugins/fantastic-bc250` and `decky-loader-seed` copies it
 into `~/homebrew/plugins/fantastic-bc250` on first boot. It is installed by
 default but disabled: the host curve remains authoritative until the user
-enables the custom fan curve in the Decky Quick Access Menu.
+enables the custom fan curve in the Decky Quick Access Menu. The panel also
+has a **Fan Speed** slider for a direct flat 0–100% target.
 
 The backend resolves `~/.config/fantastic/fantastic.json` from `$HOME`, which
 `main.py` sets to `/home/steamheadless`; `usdpl_back::api::dirs::home()` is not
