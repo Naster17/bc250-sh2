@@ -77,7 +77,8 @@ fi
 
 printf '\n== fan arbiter ==\n'
 fan_pid=$(cat /run/bc250-fan-curve.pid 2>/dev/null || true)
-if [ -n "${fan_pid:-}" ] && kill -0 "$fan_pid" 2>/dev/null; then
+if [ -n "${fan_pid:-}" ] && [ -r "/proc/${fan_pid}/cmdline" ] &&
+    tr '\000' ' ' <"/proc/${fan_pid}/cmdline" | grep -q 'bc250-fan-curve'; then
     ok "bc250-fan-curve" "running (pid $fan_pid)"
 else
     bad "bc250-fan-curve" "not running"

@@ -32,6 +32,9 @@ layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
   persists and the manual heartbeat is written.
 - A fresh clone no longer needs hand-edited `SH2_DIR`, `PUID`, `PGID` or `TZ`;
   the bootstrap chooses a user-writable data root and the current host identity.
+- `make verify` no longer needs root to confirm the host fan daemon: the
+  daemon runs as root, so `kill -0` from the normal user returned EPERM even
+  while it was alive. The check now inspects `/proc/<pid>/cmdline`.
 
 ## [1.6.0] - 2026-11-10
 
