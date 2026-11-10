@@ -8,7 +8,7 @@
 set -euo pipefail
 
 readonly repo="${BC250FC_REPO:-https://github.com/Naster17/bc250fc.git}"
-readonly ref="${BC250FC_REF:-v0.2.0}"
+readonly ref="${BC250FC_REF:-v0.2.1}"
 
 run_root() {
     if [[ "$(id -u)" -eq 0 ]]; then
@@ -44,7 +44,8 @@ start_service() {
     fi
 }
 
-if command -v bc250-fan-curve >/dev/null 2>&1 && service_active; then
+if command -v bc250-fan-curve >/dev/null 2>&1 && service_active &&
+    [[ "${BC250FC_FORCE:-0}" != "1" ]]; then
     echo "bc250-fan-curve already installed and running"
     exit 0
 fi

@@ -76,6 +76,28 @@ impl ControlRuntime {
                 }
                 start_time = Instant::now();
 
+                // A `doas fan ...` request is sticky and outranks the Decky
+                // heartbeat.  Disable our output and mirror the CLI record so
+                // the host daemon's status/control file remain coherent.
+                {
+                    let cli_owned = {
+                        let settings = runtime_settings.blocking_read();
+                        settings.enable && crate::sys::cli_override_present()
+                    };
+                    if cli_owned {
+                        log::info!("host CLI fan override active; disabling Decky output");
+                        {
+                            let mut settings = runtime_settings.blocking_write();
+                            settings.enable = false;
+                        }
+                        if let Err(e) = crate::sys::mirror_cli_control() {
+                            log::error!("failed to mirror CLI fan control: {}", e);
+                        }
+                        let mut state = runtime_state.blocking_write();
+                        state.dirty = true;
+                    }
+                }
+
                 {
                     let state = runtime_state.blocking_read();
                     if state.dirty {

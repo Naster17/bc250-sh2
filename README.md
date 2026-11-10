@@ -181,7 +181,7 @@ Notes:
   `shortcuts.vdf` rules, or
   [docs/prism-launcher.md](docs/prism-launcher.md) for the Prism 9.x example.
 - **Image tags:** `make build` keeps `steam-headless-bc250:2` for compose and
-  adds `steam-headless-bc250:1.7.1` for rollback. The image carries OCI
+  adds `steam-headless-bc250:1.7.2` for rollback. The image carries OCI
   `version` and `revision` labels.
 - Boot-time config seeding never overwrites an existing
   `~/.config/sunshine/sunshine.conf` or `apps.json`.
@@ -291,11 +291,12 @@ mounts `/run/bc250-fan` read-write and both the `doas fan` CLI and the
 **Fantastic BC250** Decky plugin send requests through
 `/run/bc250-fan/control`:
 
-- `source=cli` is sticky until `doas fan auto`;
+- `source=cli` is sticky until `doas fan auto`; the CLI also writes
+  `/run/bc250-fan/cli`, which the daemon checks before the Decky heartbeat;
 - `source=decky` is a 5-second heartbeat;
 - stale/missing/`auto` records return to the host GPU-edge curve;
-- the plugin is installed by default but disabled, so the host curve remains
-  authoritative until you enable it in the QAM.
+- `doas fan 100` / `fan auto` outrank the plugin; the plugin backend yields and
+  disables itself, so re-enable it in the QAM for plugin control.
 
 The container never writes sysfs. Full protocol, host install and
 troubleshooting: [docs/fan-control.md](docs/fan-control.md).

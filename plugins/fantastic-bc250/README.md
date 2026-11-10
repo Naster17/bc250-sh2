@@ -27,9 +27,13 @@ updated=1762770000
 
 The host daemon (`bc250fc`) applies the target and is the only writer of
 `pwm2`. If the plugin is disabled, the container stops, or the heartbeat is
-older than 5 seconds, the host daemon returns to its own GPU-edge curve. The
-host CLI uses the same file with `source=cli`, so `doas fan 50` and
-`doas fan auto` continue to work while the daemon stays alive.
+older than 5 seconds, the host daemon returns to its own GPU-edge curve.
+
+The host CLI is authoritative: `doas fan 50` and `doas fan auto` write a
+sticky `/run/bc250-fan/cli` record that the daemon checks before the Decky
+heartbeat. The plugin detects that record, mirrors it into `control`, and
+disables its own output. Enabling the plugin again from the panel removes the
+CLI record and claims control back.
 
 ## Files
 

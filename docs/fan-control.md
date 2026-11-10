@@ -20,8 +20,10 @@ writes sysfs.
 ```mermaid
 flowchart LR
     P[Fantastic BC250<br/>Decky plugin] -->|heartbeat| C[/run/bc250-fan/control]
-    F[doas fan 50 / fan auto] -->|sticky request| C
-    C --> D[host bc250-fan-curve]
+    F[doas fan 50 / fan auto] -->|sticky request| L[/run/bc250-fan/cli]
+    F -->|compatibility record| C
+    L --> D[host bc250-fan-curve]
+    C --> D
     D -->|pwm2| H[NCT6686 CPU_FAN1]
     P -. reads .-> S[/sys nct6686 + amdgpu/]
 ```
@@ -40,6 +42,12 @@ updated=1762770000
   `updated` is at most 5 seconds old (`BC250_FAN_CONTROL_TTL` overrides).
 - Missing, malformed, stale, or `mode=auto` records fall back to the host
   GPU-edge curve. If the temperature sensor disappears, both sides force 100%.
+- The CLI also writes `/run/bc250-fan/cli`. The daemon checks that record
+  first, so a live Decky heartbeat cannot erase `doas fan 100` or
+  `doas fan auto`.
+- The plugin backend detects the CLI record, mirrors it into `control`, and
+  disables its output. Enabling the plugin again from the QAM removes the CLI
+  record and claims control back.
 
 ## Default Decky plugin
 
@@ -59,7 +67,7 @@ new plugin version replaces the plugin directory on boot, while
 ## Host setup
 
 The supported path is the repository bootstrap, which installs the pinned
-`bc250fc` v0.2.0 stack when it is missing:
+`bc250fc` v0.2.1 stack when it is missing:
 
 ```sh
 make host-fan       # install/verify only the host fan daemon
@@ -74,7 +82,7 @@ or systemd service.
 Manual equivalent:
 
 ```sh
-git clone --branch v0.2.0 https://github.com/Naster17/bc250fc.git
+git clone --branch v0.2.1 https://github.com/Naster17/bc250fc.git
 cd bc250fc
 doas sh install.sh
 ```
@@ -106,8 +114,9 @@ doas fan status
 doas fan 3 60          # J4003 channel, direct sysfs
 ```
 
-`fan 50` and `fan auto` no longer stop the daemon; they write the shared
-control file, so the daemon stays alive and can take over immediately.
+`fan 50` and `fan auto` no longer stop the daemon; they write the sticky CLI
+record and the shared control file. The plugin yields while the CLI record
+exists; to return to plugin control, enable it again from the QAM.
 
 ## Verification
 
@@ -138,4 +147,4 @@ Remove the record or wait five seconds to return to the host curve.
 | Plugin changes are overwritten | Host `bc250-fan-curve` is not running the arbiter version, or the heartbeat is stale. Reinstall `bc250fc` and check `/run/bc250-fan/control` |
 | `fan 50` works but plugin does not | Plugin is disabled, or `source=decky` heartbeat is older than 5 s; check the control file |
 | Container stops and fan stays loud | The host daemon should take over within 5 s. Check `rc-service bc250-fan-curve status` and host logs |
-| `fan auto` does nothing | The plugin is enabled and immediately writes a new manual heartbeat; disable the plugin first |
+| `fan auto` does not stay | An old `bc250fc` is installed; update to v0.2.1 with `BC250FC_FORCE=1 make host-fan` and check `/run/bc250-fan/cli` |

@@ -132,6 +132,11 @@ impl<'a> IFan<'a> for FanService {
             &mut self,
             input: EnablementMessage,
         ) -> Result<EnablementMessage, Box<dyn std::error::Error + Send>>{
+            if input.is_enabled {
+                if let Err(e) = crate::sys::claim_decky() {
+                    log::error!("failed to claim Decky fan control: {}", e);
+                }
+            }
             let mut settings = self.ctrl.settings().write().await;
             if settings.enable != input.is_enabled {
                 let mut state = self.ctrl.state().write().await;

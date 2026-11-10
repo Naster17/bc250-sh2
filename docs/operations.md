@@ -83,7 +83,7 @@ Update the base image:
 ```bash
 docker pull josh5/steam-headless:2
 docker compose build --no-cache
-docker tag steam-headless-bc250:2 steam-headless-bc250:1.7.1
+docker tag steam-headless-bc250:2 steam-headless-bc250:1.7.2
 make up
 ```
 

@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const CONTROL_PATH: &str = "/run/bc250-fan/control";
+pub const CLI_PATH: &str = "/run/bc250-fan/cli";
 
 fn hwmon_named(name: &str) -> Option<PathBuf> {
     let entries = fs::read_dir("/sys/class/hwmon").ok()?;
@@ -55,26 +56,24 @@ pub fn read_temperature(source: &Path) -> Option<u64> {
     read_u64(source.join("temp1_input")).or_else(|| read_u64(source.join("temp")))
 }
 
-/// A manual target is valid for a few seconds.  The host daemon falls back to
-/// its own curve if the plugin dies, the container stops, or Steam is closed.
-fn write_control(mode: &str, pwm: Option<u64>) -> Result<(), std::io::Error> {
-    let path = Path::new(CONTROL_PATH);
+/// True while the host `fan` CLI has a sticky request.  The plugin must not
+/// overwrite it with its 1 s heartbeat; the UI re-enables the plugin through
+/// `claim_decky`, which removes the CLI record.
+pub fn cli_override_present() -> bool {
+    fs::metadata(CLI_PATH).is_ok()
+}
+
+fn write_body(path: &Path, body: &str) -> Result<(), std::io::Error> {
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::other("control path has no parent"))?;
     fs::create_dir_all(parent)?;
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let mut body = format!("mode={mode}\nsource=decky\nupdated={now}\n");
-    if let Some(pwm) = pwm {
-        body.push_str(&format!("pwm={}\n", pwm.min(255)));
-    }
-
     // Atomic replace so the host daemon never reads a half-written file.
-    let tmp = parent.join(format!(".control.{}", std::process::id()));
+    let tmp = parent.join(format!(
+        ".{}.{}",
+        path.file_name().and_then(|name| name.to_str()).unwrap_or("control"),
+        std::process::id()
+    ));
     {
         let mut file = fs::File::create(&tmp)?;
         file.write_all(body.as_bytes())?;
@@ -84,10 +83,44 @@ fn write_control(mode: &str, pwm: Option<u64>) -> Result<(), std::io::Error> {
     Ok(())
 }
 
+/// A manual target is valid for a few seconds.  The host daemon falls back to
+/// its own curve if the plugin dies, the container stops, or Steam is closed.
+fn write_control(mode: &str, pwm: Option<u64>) -> Result<(), std::io::Error> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut body = format!("mode={mode}\nsource=decky\nupdated={now}\n");
+    if let Some(pwm) = pwm {
+        body.push_str(&format!("pwm={}\n", pwm.min(255)));
+    }
+    write_body(Path::new(CONTROL_PATH), &body)
+}
+
+/// Copy the host CLI record into the shared control file.  This closes the
+/// race where a plugin heartbeat lands just after `fan 100`; the CLI record
+/// itself remains the authority for the host daemon.
+pub fn mirror_cli_control() -> Result<(), std::io::Error> {
+    let body = fs::read_to_string(CLI_PATH)?;
+    write_body(Path::new(CONTROL_PATH), &body)
+}
+
+/// Called when the UI explicitly enables the plugin.  Drop the sticky CLI
+/// override so the plugin's own curve can take over.
+pub fn claim_decky() -> Result<(), std::io::Error> {
+    match fs::remove_file(CLI_PATH) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+    write_control("auto", None)
+}
+
 /// Called when the UI toggle changes.  Disabling hands control back to the
 /// host curve immediately instead of waiting for the heartbeat to expire.
+/// Never erase a CLI request: the host CLI owns the fan until it is released.
 pub fn write_fan_recalc(enabled: bool) -> Result<(), std::io::Error> {
-    if enabled {
+    if enabled || cli_override_present() {
         Ok(())
     } else {
         write_control("auto", None)

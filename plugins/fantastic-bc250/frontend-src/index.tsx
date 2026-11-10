@@ -373,6 +373,11 @@ const Content: VFC<{ serverAPI: ServerAPI }> = ({serverAPI}) => {
     if (periodicHook != null) {
       clearInterval(periodicHook);
     }
+    // The host CLI can take ownership and disable the backend asynchronously.
+    // Keep the panel's enabled state in sync without re-enabling it.
+    periodicHook = setInterval(() => {
+      backend.resolve(backend.getEnabled(), setEnable);
+    }, 2000);
 
     /*periodicHook = setInterval(function() {
         backend.resolve(backend.getTemperature(), setTemperature);

@@ -25,7 +25,7 @@ FROM josh5/steam-headless:2@sha256:c60f4d7243a4d94515f722441fff90b752413bf6a45bb
 
 USER root
 
-ARG IMAGE_VERSION=1.7.1
+ARG IMAGE_VERSION=1.7.2
 ARG GIT_REVISION=unknown
 # Pinned Decky Loader release. Bump the version and checksum together.
 ARG DECKY_LOADER_VERSION=v3.3.1

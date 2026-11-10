@@ -3,6 +3,26 @@
 All notable changes to this deployment. Versioning: `MAJOR` = breaking host
 layout or network change, `MINOR` = image/feature change, `PATCH` = config fix.
 
+## [1.7.2] - 2026-11-10
+
+### Fixed
+
+- **The host `fan` CLI now outranks the Decky heartbeat.** `doas fan 100` writes
+  a sticky `/run/bc250-fan/cli` record; `bc250-fan-curve` checks it before the
+  shared control file, so the plugin can no longer overwrite it one second
+  later with its old flat curve.
+- The plugin backend detects the CLI record, mirrors it to the control file,
+  and disables its output instead of fighting the CLI. `doas fan auto` works
+  even while the plugin is enabled.
+- Enabling the plugin or moving its manual slider again removes the CLI record
+  through `claim_decky` and resumes plugin control.
+
+### Changed
+
+- `bc250fc` pin is `v0.2.1`; `make host-fan` supports
+  `BC250FC_FORCE=1` to reinstall/update an existing daemon.
+- Fantastic BC250 plugin version is `1.0.6`; image version is `1.7.2`.
+
 ## [1.7.1] - 2026-11-10
 
 ### Changed
