@@ -25,25 +25,11 @@ FROM josh5/steam-headless:2@sha256:c60f4d7243a4d94515f722441fff90b752413bf6a45bb
 
 USER root
 
-ARG IMAGE_VERSION=1.7.2
-ARG GIT_REVISION=unknown
 # Pinned Decky Loader release. Bump the version and checksum together.
 ARG DECKY_LOADER_VERSION=v3.3.1
 ARG DECKY_LOADER_SHA256=7bb73b0502c49e7194f34f9ce4ddb6777764e9277d7a5e54665f66460d50c315
 # Override to a local mirror when GitHub is slow; the checksum still applies.
 ARG DECKY_LOADER_URL=
-
-LABEL org.opencontainers.image.title="Steam Headless BC-250" \
-      org.opencontainers.image.description="Thin Steam Headless 2 layer for the AMD BC-250 (Cyan Skillfish / RADV GFX1013)" \
-      org.opencontainers.image.version="${IMAGE_VERSION}" \
-      org.opencontainers.image.revision="${GIT_REVISION}" \
-      org.opencontainers.image.source="https://github.com/Naster17/bc250-sh2" \
-      org.opencontainers.image.licenses="MIT" \
-      decky-loader.version="${DECKY_LOADER_VERSION}"
-
-# The curated rootfs mirrors the container filesystem; one COPY keeps the layer
-# count down. .dockerignore keeps VCS, docs and local data out of the context.
-COPY rootfs/ /
 
 # Ship Decky's PluginLoader in the image instead of downloading it at first
 # boot. The release asset is architecture-specific; this deployment is x86_64.
@@ -58,9 +44,21 @@ RUN set -eux; \
     printf '%s\n' "${DECKY_LOADER_VERSION}" >/opt/decky-loader/VERSION; \
     chmod 0644 /opt/decky-loader/VERSION
 
-# Keep this copy after the pinned Decky download so plugin-only changes do not
-# invalidate the 33 MB PluginLoader layer.
+# Keep the curated rootfs and plugin copy after the pinned Decky download so
+# content-only changes do not invalidate the 33 MB PluginLoader layer.
+COPY rootfs/ /
 COPY plugins/ /opt/decky-loader/plugins/
+
+ARG IMAGE_VERSION=1.7.2
+ARG GIT_REVISION=unknown
+
+LABEL org.opencontainers.image.title="Steam Headless BC-250" \
+      org.opencontainers.image.description="Thin Steam Headless 2 layer for the AMD BC-250 (Cyan Skillfish / RADV GFX1013)" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.source="https://github.com/Naster17/bc250-sh2" \
+      org.opencontainers.image.licenses="MIT" \
+      decky-loader.version="${DECKY_LOADER_VERSION}"
 
 RUN set -eux; \
     chmod 0755 /usr/local/bin/gamescope-no-force-grab \
